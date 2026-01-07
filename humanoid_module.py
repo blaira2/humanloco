@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import glob
 import os
 
+from humanoid_variants import VARIANTS
+
 
 default_params = dict(
     TORSO_RADIUS=0.12,
@@ -36,125 +38,6 @@ default_params = dict(
     ARM_RADIUS=0.04,
     ARM_LENGTH=0.25
 )
-
-VARIANTS = {
-    "variant1": dict(
-        xml="humanoid_variant1.xml",
-        TORSO_RADIUS=0.12, TORSO_HALF=0.35, TORSO_LENGTH=0.7,
-        HEAD_RADIUS=0.11, HEAD_HEIGHT=0.45,
-        ARM_RADIUS=0.04, ARM_LENGTH=0.25, ARM_OFFSET=0.18, ARM_HEIGHT=0.35,
-        HIP_OFFSET=0.10,
-        THIGH_LENGTH=0.34, SHIN_LENGTH=0.30,
-        THIGH_RADIUS=0.06, SHIN_RADIUS=0.05,
-        FOOT_RADIUS=0.075,
-    ),
-    "variant2": dict(
-        xml="humanoid_variant2.xml",
-        TORSO_RADIUS=0.10, TORSO_HALF=0.25, TORSO_LENGTH=0.55,
-        HEAD_RADIUS=0.10, HEAD_HEIGHT=0.38,
-        ARM_RADIUS=0.035, ARM_LENGTH=0.20, ARM_OFFSET=0.16, ARM_HEIGHT=0.32,
-        HIP_OFFSET=0.10,
-        THIGH_LENGTH=0.34, SHIN_LENGTH=0.30,
-        THIGH_RADIUS=0.055, SHIN_RADIUS=0.045,
-        FOOT_RADIUS=0.07,
-    ),
-    "variant3": dict(
-        xml="humanoid_variant3.xml",
-        TORSO_RADIUS=0.13, TORSO_HALF=0.45, TORSO_LENGTH=0.85,
-        HEAD_RADIUS=0.115, HEAD_HEIGHT=0.52,
-        ARM_RADIUS=0.045, ARM_LENGTH=0.33, ARM_OFFSET=0.20, ARM_HEIGHT=0.40,
-        HIP_OFFSET=0.10,
-        THIGH_LENGTH=0.34, SHIN_LENGTH=0.30,
-        THIGH_RADIUS=0.06, SHIN_RADIUS=0.05,
-        FOOT_RADIUS=0.075,
-    ),
-    "variant4": dict(
-        xml="humanoid_variant4.xml",
-        TORSO_RADIUS=0.12, TORSO_HALF=0.35, TORSO_LENGTH=0.7,
-        HEAD_RADIUS=0.11, HEAD_HEIGHT=0.45,
-        ARM_RADIUS=0.04, ARM_LENGTH=0.25, ARM_OFFSET=0.18, ARM_HEIGHT=0.35,
-        HIP_OFFSET=0.10,
-        THIGH_LENGTH=0.42, SHIN_LENGTH=0.36,
-        THIGH_RADIUS=0.055, SHIN_RADIUS=0.045,
-        FOOT_RADIUS=0.075,
-    ),
-    "variant5": dict(
-        xml="humanoid_variant5.xml",
-        TORSO_RADIUS=0.12, TORSO_HALF=0.33, TORSO_LENGTH=0.65,
-        HEAD_RADIUS=0.11, HEAD_HEIGHT=0.43,
-        ARM_RADIUS=0.04, ARM_LENGTH=0.25, ARM_OFFSET=0.18, ARM_HEIGHT=0.34,
-        HIP_OFFSET=0.10,
-        THIGH_LENGTH=0.26, SHIN_LENGTH=0.22,
-        THIGH_RADIUS=0.06, SHIN_RADIUS=0.05,
-        FOOT_RADIUS=0.072,
-    ),
-    "variant6": dict(
-        xml="humanoid_variant6.xml",
-        TORSO_RADIUS=0.16, TORSO_HALF=0.40, TORSO_LENGTH=0.75,
-        HEAD_RADIUS=0.13, HEAD_HEIGHT=0.47,
-        ARM_RADIUS=0.055, ARM_LENGTH=0.25, ARM_OFFSET=0.19, ARM_HEIGHT=0.35,
-        HIP_OFFSET=0.12,
-        THIGH_LENGTH=0.34, SHIN_LENGTH=0.30,
-        THIGH_RADIUS=0.075, SHIN_RADIUS=0.065,
-        FOOT_RADIUS=0.085,
-    ),
-    "variant7": dict(
-        xml="humanoid_variant7.xml",
-        TORSO_RADIUS=0.09, TORSO_HALF=0.30, TORSO_LENGTH=0.60,
-        HEAD_RADIUS=0.09, HEAD_HEIGHT=0.40,
-        ARM_RADIUS=0.03, ARM_LENGTH=0.28, ARM_OFFSET=0.16, ARM_HEIGHT=0.34,
-        HIP_OFFSET=0.09,
-        THIGH_LENGTH=0.34, SHIN_LENGTH=0.30,
-        THIGH_RADIUS=0.045, SHIN_RADIUS=0.04,
-        FOOT_RADIUS=0.065,
-    ),
-    "default_var": dict(
-        xml="humanoid_default.xml",
-        TORSO_RADIUS=0.12,
-        TORSO_HALF=0.35,
-        TORSO_LENGTH=0.7,
-
-        HEAD_RADIUS=0.11,
-        HEAD_HEIGHT=0.45,
-
-        HIP_OFFSET=0.1,
-        THIGH_LENGTH=0.34,
-        SHIN_LENGTH=0.30,
-        THIGH_RADIUS=0.06,
-        SHIN_RADIUS=0.05,
-
-        FOOT_RADIUS=0.075,
-        # FOOT_OFFSET=0.00,
-
-        ARM_OFFSET=0.18,
-        ARM_HEIGHT=0.35,
-        ARM_RADIUS=0.04,
-        ARM_LENGTH=0.25
-    ),
-"test_var": dict(
-        xml="humanoid_custom.xml",
-        TORSO_RADIUS=0.12,
-        TORSO_HALF=0.35,
-        TORSO_LENGTH=0.7,
-
-        HEAD_RADIUS=0.11,
-        HEAD_HEIGHT=0.45,
-
-        HIP_OFFSET=0.1,
-        THIGH_LENGTH=0.4,
-        SHIN_LENGTH=0.4,
-        THIGH_RADIUS=0.06,
-        SHIN_RADIUS=0.05,
-
-        FOOT_RADIUS=0.075,
-        # FOOT_OFFSET=0.00,
-
-        ARM_OFFSET=0.18,
-        ARM_HEIGHT=0.35,
-        ARM_RADIUS=0.04,
-        ARM_LENGTH=0.25
-    ),
-}
 
 MORPH_KEYS = [
     "TORSO_RADIUS", "TORSO_HALF", "TORSO_LENGTH",
