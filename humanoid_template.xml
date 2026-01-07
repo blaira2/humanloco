@@ -1,0 +1,202 @@
+<mujoco model="simplified_humanoid">
+    <compiler angle="degree" inertiafromgeom="true"/>
+
+    <option timestep="0.003" solver="PGS" iterations="50" />
+
+    <default>
+        <joint armature="0.01" damping="1" limited="true"/>
+        <geom type="capsule" rgba="0.45 0.32 0.21 1"/>
+        <motor ctrllimited="true" ctrlrange="-1 1"/>
+    </default>
+
+    <!-- Global view settings -->
+    <visual>
+        <global azimuth="0" elevation="-20"/>
+    </visual>
+
+    <worldbody>
+
+        <!-- ===================== LIGHTING ===================== -->
+        <light name="sun"
+               directional="true"
+               diffuse="1 1 1"
+               specular="0.2 0.2 0.2"
+               pos="5 5 10"
+               dir="-1 -1 -2"
+               cutoff="200"
+               exponent="5" />
+
+        <light name="fill"
+               directional="false"
+               diffuse="0.35 0.35 0.35"
+               specular="0.1 0.1 0.1"
+               pos="0 3 2" />
+
+        <!-- ===================== CAMERA ===================== -->
+        <camera name="follow"
+                mode="trackcom"
+                pos="0 -4 1.6"
+                xyaxes="1 0 0 0 0 1" />
+
+        <!-- ===================== GROUND ===================== -->
+        <geom name="floor"
+              type="plane"
+              pos="0 0 0"
+              size="20 20 0.1"
+              friction="1 0.1 0.1"
+              rgba="0.75 0.85 0.75 1" />
+
+        <!-- ===================== HUMANOID ROOT ===================== -->
+        <!-- Dynamic torso height inserted by Python -->
+        <body name="torso" pos="0 0 {TORSO_START_Z}">
+
+            <joint name="root_free" type="free"/>
+
+            <!-- Torso -->
+            <geom name="torso_geom"
+                  type="capsule"
+                  size="{TORSO_RADIUS} {TORSO_HALF}"
+                  fromto="0 0 0 0 0 {TORSO_LENGTH}" />
+
+            <!-- Head -->
+            <geom name="head_geom"
+                  type="sphere"
+                  size="{HEAD_RADIUS}"
+                  pos="0 0 {HEAD_HEIGHT}" />
+
+
+            <!-- ============================================================== -->
+            <!-- ====================== ARMS ================================== -->
+            <!-- ============================================================== -->
+
+            <!-- Right Arm -->
+            <body name="right_upper_arm" pos="0 -{ARM_OFFSET} {ARM_HEIGHT}">
+                <joint name="right_shoulder_pitch" type="hinge" axis="1 0 0" range="-90 90"/>
+                <joint name="right_shoulder_roll"  type="hinge" axis="0 1 0" range="-90 90"/>
+
+                <geom name="right_upper_arm_geom"
+                      type="capsule"
+                      size="{ARM_RADIUS}"
+                      fromto="0 0 0 {ARM_LENGTH} 0 0"/>
+
+                <body name="right_lower_arm" pos="{ARM_LENGTH} 0 0">
+                    <joint name="right_elbow" type="hinge" axis="0 1 0" range="0 135"/>
+                    <geom name="right_lower_arm_geom"
+                          type="capsule"
+                          size="{ARM_RADIUS}"
+                          fromto="0 0 0 {ARM_LENGTH} 0 0"/>
+                </body>
+            </body>
+
+            <!-- Left Arm -->
+            <body name="left_upper_arm" pos="0 {ARM_OFFSET} {ARM_HEIGHT}">
+                <joint name="left_shoulder_pitch" type="hinge" axis="1 0 0" range="-90 90"/>
+                <joint name="left_shoulder_roll"  type="hinge" axis="0 1 0" range="-90 90"/>
+
+                <geom name="left_upper_arm_geom"
+                      type="capsule"
+                      size="{ARM_RADIUS}"
+                      fromto="0 0 0 {ARM_LENGTH} 0 0"/>
+
+                <body name="left_lower_arm" pos="{ARM_LENGTH} 0 0">
+                    <joint name="left_elbow" type="hinge" axis="0 1 0" range="0 135"/>
+                    <geom name="left_lower_arm_geom"
+                          type="capsule"
+                          size="{ARM_RADIUS}"
+                          fromto="0 0 0 {ARM_LENGTH} 0 0"/>
+                </body>
+            </body>
+
+
+            <!-- ============================================================== -->
+            <!-- ======================== LEGS ================================ -->
+            <!-- ============================================================== -->
+
+            <!-- Right Leg -->
+            <body name="right_thigh" pos="0 -{HIP_OFFSET} -0.05">
+
+                <joint name="right_hip_pitch" type="hinge" axis="1 0 0" range="-45 45"/>
+                <joint name="right_hip_roll"  type="hinge" axis="0 1 0" range="-45 45"/>
+                <joint name="right_hip_yaw"   type="hinge" axis="0 0 1" range="-60 60"/>
+
+                <geom name="right_thigh_geom"
+                      type="capsule"
+                      size="{THIGH_RADIUS}"
+                      fromto="0 0 0 0 0 -{THIGH_LENGTH}" />
+
+                <body name="right_shin" pos="0 0 -{THIGH_LENGTH}">
+                    <joint name="right_knee" type="hinge" axis="0 1 0" range="-150 -2"/>
+
+                    <geom name="right_shin_geom"
+                          type="capsule"
+                          size="{SHIN_RADIUS}"
+                          fromto="0 0 0 0 0 -{SHIN_LENGTH}" />
+
+                    <body name="right_foot" pos="0 0 -{SHIN_LENGTH}">
+                        <geom name="right_foot_geom"
+                              type="sphere"
+                              size="{FOOT_RADIUS}"
+                              pos="0 0 0" />
+                    </body>
+                </body>
+            </body>
+
+            <!-- Left Leg -->
+            <body name="left_thigh" pos="0 {HIP_OFFSET} -0.05">
+
+                <joint name="left_hip_pitch" type="hinge" axis="-1 0 0" range="-45 45"/>
+                <joint name="left_hip_roll"  type="hinge" axis="0 1 0"  range="-45 45"/>
+                <joint name="left_hip_yaw"   type="hinge" axis="0 0 -1" range="-60 60"/>
+
+                <geom name="left_thigh_geom"
+                      type="capsule"
+                      size="{THIGH_RADIUS}"
+                      fromto="0 0 0 0 0 -{THIGH_LENGTH}" />
+
+                <body name="left_shin" pos="0 0 -{THIGH_LENGTH}">
+                    <joint name="left_knee" type="hinge" axis="0 1 0" range="-150 -2"/>
+
+                    <geom name="left_shin_geom"
+                          type="capsule"
+                          size="{SHIN_RADIUS}"
+                          fromto="0 0 0 0 0 -{SHIN_LENGTH}" />
+
+                    <body name="left_foot" pos="0 0 -{SHIN_LENGTH}">
+                        <geom name="left_foot_geom"
+                              type="sphere"
+                              size="{FOOT_RADIUS}"
+                              pos="0 0 0" />
+                    </body>
+                </body>
+            </body>
+
+        </body>
+    </worldbody>
+
+
+    <!-- ===================== ACTUATORS ===================== -->
+    <actuator>
+
+        <!-- Arms -->
+        <motor name="right_shoulder_pitch_motor" joint="right_shoulder_pitch" gear="60"/>
+        <motor name="right_shoulder_roll_motor"  joint="right_shoulder_roll"  gear="60"/>
+        <motor name="right_elbow_motor"         joint="right_elbow"          gear="40"/>
+
+        <motor name="left_shoulder_pitch_motor" joint="left_shoulder_pitch" gear="60"/>
+        <motor name="left_shoulder_roll_motor"  joint="left_shoulder_roll"  gear="60"/>
+        <motor name="left_elbow_motor"          joint="left_elbow"          gear="40"/>
+
+        <!-- Legs -->
+        <motor name="right_hip_pitch_motor" joint="right_hip_pitch" gear="150"/>
+        <motor name="right_hip_roll_motor"  joint="right_hip_roll"  gear="150"/>
+        <motor name="right_hip_yaw_motor"   joint="right_hip_yaw"   gear="150"/>
+        <motor name="right_knee_motor"      joint="right_knee"      gear="200"/>
+
+        <motor name="left_hip_pitch_motor"  joint="left_hip_pitch"  gear="150"/>
+        <motor name="left_hip_roll_motor"   joint="left_hip_roll"   gear="150"/>
+        <motor name="left_hip_yaw_motor"    joint="left_hip_yaw"    gear="150"/>
+        <motor name="left_knee_motor"       joint="left_knee"       gear="200"/>
+
+    </actuator>
+
+</mujoco>
