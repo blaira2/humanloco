@@ -153,7 +153,89 @@ policy_kwargs = dict( # MLP
         net_arch=[128, 96, 64]  # 3 hidden layers shared by pi & vf
     )
 
-def train_variant_ppo(
+def train_balance_env(
+        variant_name,
+        cfg,
+        xml_file,
+        timesteps=300_000,
+        parallel_envs=3,
+        initial_learning_rate=2e-4,
+        video_every=10):
+
+    xml_path = os.path.abspath(xml_file)
+
+    # ---------- CREATE VEC ENV ----------
+    env_fns = [
+        make_balance_env(xml_path, cfg, seed=i)
+        for i in range(parallel_envs)
+    ]
+    if parallel_envs == 1:
+        vec_env = DummyVecEnv(env_fns)
+    else:
+        vec_env = SubprocVecEnv(env_fns)
+    # Normalize observations and rewards
+    vec_env = VecNormalize(
+        vec_env,
+        norm_obs=False,
+        norm_reward=False,
+        clip_obs=10.0,
+        clip_reward=10.0,
+    )
+    vec_env = VecMonitor(vec_env)
+    vec_env.save(f"./norms/{variant_name}_vecnorm.pkl")
+
+    # ---------- LOGGER ----------
+    logger = configure(folder=f"./logs_{variant_name}", format_strings=["stdout", "csv", "tensorboard"])
+
+    # learning
+    final_lr = initial_learning_rate *.1
+    lr_schedule = LinearSchedule(
+        start=5e-4,
+        end=final_lr,
+        end_fraction=.9
+    )
+
+    # ---------- MODEL ----------
+    model = PPO(
+        "MlpPolicy",
+        vec_env,
+        policy_kwargs=policy_kwargs,
+        n_steps=2048 // parallel_envs,   # good rule-of-thumb
+        batch_size=128,
+        learning_rate=lr_schedule,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.01,
+        verbose=1
+    )
+    model.set_logger(logger)
+
+    # ---------- CALLBACK FOR VIDEO ----------
+    video_cb = VideoEveryNEpisodesCallback(
+        video_every=video_every,
+        xml_file=xml_path,
+        morph=cfg,
+        out_dir=f"{variant_name}_videos"
+    )
+
+    debug_cb = RewardDebugCallback()
+
+    # ---------- callback for incrementing forward reward scale ----------
+    forward_cb = ForwardRampCallback(total_timesteps=timesteps)
+
+    # ---------- TRAIN ----------
+    print(f"\n🚀 Training PPO for {variant_name} ...")
+    model.learn(total_timesteps=timesteps, callback=[video_cb, debug_cb, forward_cb])
+
+    # ---------- SAVE ----------
+    model.save(f"{variant_name}_ppo.zip")
+    vec_env.close()
+    print(f"✔️ Training complete for {variant_name}")
+
+    return model
+
+def train_variant(
         variant_name,
         cfg,
         xml_file,
