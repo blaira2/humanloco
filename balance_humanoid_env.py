@@ -42,6 +42,12 @@ class BalanceHumanoidEnv(HumanoidEnv):
         alive_step = 1
         self._steps_alive += 1
         alive_reward = alive_step if not (terminated or truncated) else 0.0
+        # terminal penalty shrinks over time
+        survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
+        max_penalty = 120.0
+        terminal_penalty = max_penalty * (1.0 - survival_frac)
+        if not terminated:  # only if it actually fell, not time-limit
+            terminal_penalty = 0.0
 
         downward_accel_penalty = 0.0
         if self._prev_z_vel is not None:
@@ -52,7 +58,10 @@ class BalanceHumanoidEnv(HumanoidEnv):
 
         self._prev_z_vel = float(self.data.qvel[2])
 
-        reward = alive_reward - downward_accel_penalty
+        reward = (alive_reward
+                  - downward_accel_penalty
+                  - terminal_penalty
+                  )
 
         info["alive_reward"] = float(alive_reward)
         info["accel_penalty"] = float(downward_accel_penalty)
