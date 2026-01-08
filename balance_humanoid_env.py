@@ -12,8 +12,8 @@ class BalanceHumanoidEnv(HumanoidEnv):
     def __init__(
         self,
         xml_file=None,
-        downward_accel_weight=1.0,
-        energy_penalty_weight=0.01,
+        downward_accel_weight=.04,
+        energy_penalty_weight=0.04,
         morph_params=None,
         **kwargs,
     ):

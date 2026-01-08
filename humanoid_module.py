@@ -86,11 +86,10 @@ def make_env(xml_file, morph_params, seed=0):
     return _init
 
 
-def make_balance_env(xml_file, downward_accel_weight=1.0, morph_params=None, seed=0):
+def make_balance_env(xml_file, morph_params=None, seed=0):
     def _init():
         env = BalanceHumanoidEnv(
             xml_file=xml_file,
-            downward_accel_weight=downward_accel_weight,
             morph_params=morph_params,
             render_mode=None,  # IMPORTANT: no rendering in training
         )
@@ -168,7 +167,7 @@ def train_balance_env(
 
     # ---------- CREATE VEC ENV ----------
     env_fns = [
-        make_balance_env(xml_path, downward_accel_weight=0.05, morph_params=cfg, seed=i)
+        make_balance_env(xml_path, morph_params=cfg, seed=i)
         for i in range(parallel_envs)
     ]
     if parallel_envs == 1:
