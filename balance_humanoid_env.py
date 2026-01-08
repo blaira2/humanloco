@@ -14,11 +14,15 @@ class BalanceHumanoidEnv(HumanoidEnv):
         xml_file=None,
         downward_accel_weight=0.02,
         energy_penalty_weight=0.04,
+        angular_velocity_penalty_weight=0.02,
         morph_params=None,
         **kwargs,
     ):
         self.downward_accel_weight = float(downward_accel_weight)
         self.energy_penalty_weight = float(energy_penalty_weight)
+        self.angular_velocity_penalty_weight = float(
+            angular_velocity_penalty_weight
+        )
         self._prev_z_vel = None
         self._steps_alive = 0
         self.morph = morph_params
@@ -63,16 +67,23 @@ class BalanceHumanoidEnv(HumanoidEnv):
         action = np.asarray(action)
         energy_penalty = self.energy_penalty_weight * (np.sum(action**2) / len(action))
 
+        angular_velocity_penalty = (
+            self.angular_velocity_penalty_weight
+            * float(np.linalg.norm(self.data.qvel[3:6]))
+        )
+
         reward = (
             alive_reward
             - downward_accel_penalty
             - terminal_penalty
             - energy_penalty
+            - angular_velocity_penalty
         )
 
         info["alive_reward"] = float(alive_reward)
         info["accel_penalty"] = float(downward_accel_penalty)
         info["energy_penalty"] = float(energy_penalty)
+        info["angular_velocity_penalty"] = float(angular_velocity_penalty)
         info["morph_params"] = self.morph
 
         return obs, reward, terminated, truncated, info
