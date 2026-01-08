@@ -6,7 +6,8 @@ class BalanceHumanoidEnv(HumanoidEnv):
     """
     Humanoid environment focused on balance.
 
-    Reward is based on staying alive, with a penalty for downward acceleration.
+    Reward is based on staying alive, with penalties for instability and a bonus for
+    staying upright.
     """
 
     def __init__(
@@ -16,6 +17,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.04,
         com_alignment_weight=0.3,
+        upright_reward_weight=0.4,
         morph_params=None,
         **kwargs,
     ):
@@ -25,6 +27,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
             angular_velocity_penalty_weight
         )
         self.com_alignment_weight = float(com_alignment_weight)
+        self.upright_reward_weight = float(upright_reward_weight)
         self._prev_z_vel = None
         self._steps_alive = 0
         self.morph = morph_params
@@ -77,6 +80,11 @@ class BalanceHumanoidEnv(HumanoidEnv):
             * float(np.linalg.norm(self.data.qvel[3:6]))
         )
 
+        torso_quat = self.data.xquat[1]
+        w = float(torso_quat[0])
+        tilt_angle = 2 * np.arccos(np.clip(abs(w), 0.0, 1.0))
+        upright_reward = self.upright_reward_weight * np.exp(-tilt_angle)
+
         torso_body_id = self.model.body("torso").id
         torso_xy = self.data.xipos[torso_body_id][:2]
         com_xy = self.data.subtree_com[0][:2]
@@ -90,6 +98,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
             - energy_penalty
             - angular_velocity_penalty
             + com_alignment_reward
+            + upright_reward
         )
 
         info["alive_reward"] = float(alive_reward)
@@ -97,6 +106,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         info["energy_penalty"] = float(energy_penalty)
         info["angular_penalty"] = float(angular_velocity_penalty)
         info["com_penalty"] = float(-com_alignment_reward)
+        info["upright_reward"] = float(upright_reward)
         info["morph_params"] = self.morph
 
         return obs, reward, terminated, truncated, info
