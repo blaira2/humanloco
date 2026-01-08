@@ -430,7 +430,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         alive_reward = alive_step if not (terminated or truncated) else 0.0
         #terminal penalty shrinks over time
         survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
-        max_penalty = 150.0
+        max_penalty = 140.0
         terminal_penalty = max_penalty * (1.0 - survival_frac)
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
@@ -446,7 +446,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         n = len(action)
         energy_penalty = 1 * (energy / n)
 
-        forward_reward = 4.5 * forward_base
+        forward_reward = 5 * forward_base
 
         # -----------------
         # Minor Penalties
@@ -459,7 +459,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             forward_axis = np.array([1.0, 0.0, 0.0])
             forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
             non_forward_accel = accel - forward_accel * forward_axis
-            accel_penalty = 0.2 * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
+            accel_penalty = 0.05 * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
         self._prev_qvel = self.data.qvel.copy()
 
         # sideways = discourage strafing
