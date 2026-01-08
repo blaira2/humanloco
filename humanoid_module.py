@@ -14,6 +14,7 @@ import os
 
 from humanoid_variants import VARIANTS
 from morph_humanoid_env import MorphHumanoidEnv, compute_start_height
+from balance_humanoid_env import BalanceHumanoidEnv
 
 
 default_params = dict(
@@ -79,6 +80,18 @@ def make_env(xml_file, morph_params, seed=0):
             xml_file=xml_file,
             morph_params=morph_params,
             render_mode=None        # IMPORTANT: no rendering in training
+        )
+        env.reset(seed=seed)
+        return env
+    return _init
+
+
+def make_balance_env(xml_file, downward_accel_weight=1.0, seed=0):
+    def _init():
+        env = BalanceHumanoidEnv(
+            xml_file=xml_file,
+            downward_accel_weight=downward_accel_weight,
+            render_mode=None,  # IMPORTANT: no rendering in training
         )
         env.reset(seed=seed)
         return env
