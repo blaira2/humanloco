@@ -364,6 +364,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         # Store for debugging
         self.morph_standing_height = standing_height
         self._prev_action = None
+        self._prev_qvel = None
         # -----------------------------
         # Compute robust healthy_z_range
         # -----------------------------
@@ -450,9 +451,16 @@ class MorphHumanoidEnv(HumanoidEnv):
         # -----------------
         # Minor Penalties
         # -----------------
-        # downward penalty
-        downward_speed = max(0.0, -z_vel)  # positive when going down
-        downward_penalty = 0.2 * (1 - self.forward_scale) * downward_speed
+        # acceleration penalty (penalize every direction but forward)
+        accel_penalty = 0.0
+        if self._prev_qvel is not None:
+            dt = self.model.opt.timestep
+            accel = (self.data.qvel[:3] - self._prev_qvel[:3]) / dt
+            forward_axis = np.array([1.0, 0.0, 0.0])
+            forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
+            non_forward_accel = accel - forward_accel * forward_axis
+            accel_penalty = 0.2 * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
+        self._prev_qvel = self.data.qvel.copy()
 
         # sideways = discourage strafing
         lateral_penalty = 0.25 * abs(y_vel)
@@ -488,7 +496,7 @@ class MorphHumanoidEnv(HumanoidEnv):
                 + forward_reward
                 - terminal_penalty
                 - lateral_penalty
-                - downward_penalty
+                - accel_penalty
                 - angular_penalty
                 - energy_penalty
                 - com_penalty
@@ -497,7 +505,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["energy_penalty"] = float(energy_penalty)
         info["forward_reward"] = float(forward_reward)
         info["lateral_penalty"] = float(lateral_penalty)
-        info["down_penalty"] = float(downward_penalty)
+        info["accel_penalty"] = float(accel_penalty)
         info["com_penalty"] = float(com_penalty)
         info["angular_penalty"] = float(angular_penalty)
         info["alive_reward"] = float(alive_reward)
@@ -513,6 +521,7 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         self._steps_alive = 0
         self._prev_action = None
+        self._prev_qvel = None
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
@@ -605,7 +614,7 @@ class RewardDebugCallback(BaseCallback):
                 "lateral_penalty": 0.0,
                 "com_penalty": 0.0,
                 "angular_penalty": 0.0,
-                "down_penalty": 0.0,
+                "accel_penalty": 0.0,
                 "energy_penalty": 0.0,
             })
 
@@ -626,7 +635,7 @@ class RewardDebugCallback(BaseCallback):
             s["lateral_penalty"] += info.get("lateral_penalty", 0.0)
             s["com_penalty"] += info.get("com_penalty", 0.0)
             s["angular_penalty"] += info.get("angular_penalty", 0.0)
-            s["down_penalty"] += info.get("down_penalty", 0.0)
+            s["accel_penalty"] += info.get("accel_penalty", 0.0)
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
 
             self.ep_len[i] += 1
@@ -639,7 +648,7 @@ class RewardDebugCallback(BaseCallback):
                     f"fwd={s['forward'] / L: .3f} | "
                     f"alive={s['alive'] / L: .3f} | "
                     f"lat_p={s['lateral_penalty'] / L: .3f} | "
-                    f"down_p={s['down_penalty'] / L: .3f} | "
+                    f"accel_p={s['accel_penalty'] / L: .3f} | "
                     f"com_p={s['com_penalty'] / L: .3f} | "
                     f"ang_p={s['angular_penalty'] / L: .3f} | "
                     f"energy_p={s['energy_penalty'] / L: .3f}"
