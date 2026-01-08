@@ -222,46 +222,6 @@ def train_variant_ppo(
 
     return model
 
-def continue_training(variant_name, cfg, more_timesteps=300_000, parallel_envs=3, video_every=100):
-    xml_path = os.path.abspath(cfg["xml"])
-
-    # --- Recreate base envs ---
-    env_fns = [make_env(xml_path, cfg, seed=i) for i in range(parallel_envs)]
-
-    if parallel_envs == 1:
-        base_vec = DummyVecEnv(env_fns)
-    else:
-        base_vec = SubprocVecEnv(env_fns)
-
-    # --- Load VecNormalize stats ---
-    vecnorm_path = f"./norms/{variant_name}_vecnorm.pkl"
-    vec_env = VecNormalize.load(vecnorm_path, base_vec)
-    vec_env = VecMonitor(vec_env)
-
-    vec_env.training = True
-    vec_env.norm_reward = True
-
-    # ---------- LOGGER ----------
-    logger = configure(folder=f"./logs_{variant_name}", format_strings=["stdout", "csv", "tensorboard"])
-
-    # --- Load PPO and attach env ---
-    model_path = f"{variant_name}_ppo.zip"
-    model = PPO.load(model_path, env=vec_env)
-    model.set_logger(logger) #
-
-    video_cb = VideoEveryNEpisodesCallback(
-        video_every=video_every,
-        xml_file=xml_path,
-        morph=cfg,
-        out_dir=f"{variant_name}_videos"
-    )
-
-    # --- Continue training ---
-    model.learn(total_timesteps=more_timesteps, reset_num_timesteps=False, callback=video_cb)
-
-    # --- Save updated model + stats ---
-    model.save(f"{variant_name}_ppo_continued.zip")
-    vec_env.save(f"./norms/{variant_name}_vecnorm.pkl")
 
 def collect_trajectories(model, variant_name, cfg, num_episodes=15):
     xml_path = os.path.abspath(cfg["xml"])
