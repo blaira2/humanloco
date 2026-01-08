@@ -160,7 +160,8 @@ def train_balance_env(
         timesteps=300_000,
         parallel_envs=3,
         initial_learning_rate=2e-4,
-        video_every=10):
+        video_every=10,
+        pretrained_model=None):
 
     xml_path = os.path.abspath(xml_file)
 
@@ -196,19 +197,29 @@ def train_balance_env(
     )
 
     # ---------- MODEL ----------
-    model = PPO(
-        "MlpPolicy",
-        vec_env,
-        policy_kwargs=policy_kwargs,
-        n_steps=2048 // parallel_envs,   # good rule-of-thumb
-        batch_size=128,
-        learning_rate=lr_schedule,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
-        verbose=1
-    )
+    if pretrained_model is None:
+        model = PPO(
+            "MlpPolicy",
+            vec_env,
+            policy_kwargs=policy_kwargs,
+            n_steps=2048 // parallel_envs,   # good rule-of-thumb
+            batch_size=128,
+            learning_rate=lr_schedule,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=0.01,
+            verbose=1
+        )
+    elif isinstance(pretrained_model, (str, os.PathLike)):
+        model = PPO.load(pretrained_model, env=vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
+    else:
+        model = pretrained_model
+        model.set_env(vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
     model.set_logger(logger)
 
     # ---------- CALLBACK FOR VIDEO ----------
@@ -242,7 +253,8 @@ def train_variant(
         timesteps=300_000,
         parallel_envs=3,
         initial_learning_rate=2e-4,
-        video_every=10):
+        video_every=10,
+        pretrained_model=None):
 
     xml_path = os.path.abspath(xml_file)
 
@@ -278,19 +290,29 @@ def train_variant(
     )
 
     # ---------- MODEL ----------
-    model = PPO(
-        "MlpPolicy",
-        vec_env,
-        policy_kwargs=policy_kwargs,
-        n_steps=2048 // parallel_envs,   # good rule-of-thumb
-        batch_size=128,
-        learning_rate=lr_schedule,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
-        verbose=1
-    )
+    if pretrained_model is None:
+        model = PPO(
+            "MlpPolicy",
+            vec_env,
+            policy_kwargs=policy_kwargs,
+            n_steps=2048 // parallel_envs,   # good rule-of-thumb
+            batch_size=128,
+            learning_rate=lr_schedule,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=0.01,
+            verbose=1
+        )
+    elif isinstance(pretrained_model, (str, os.PathLike)):
+        model = PPO.load(pretrained_model, env=vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
+    else:
+        model = pretrained_model
+        model.set_env(vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
     model.set_logger(logger)
 
     # ---------- CALLBACK FOR VIDEO ----------
