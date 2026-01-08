@@ -12,7 +12,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
     def __init__(
         self,
         xml_file=None,
-        downward_accel_weight=0.02,
+        downward_accel_weight=0.015,
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.15,
         morph_params=None,
@@ -56,10 +56,13 @@ class BalanceHumanoidEnv(HumanoidEnv):
             terminal_penalty = 0.0
 
         downward_accel_penalty = 0.0
+        min_safe_accel = 1.0;
         if self._prev_z_vel is not None:
             dt = self.model.opt.timestep
             accel_z = (self.data.qvel[2] - self._prev_z_vel) / dt
             downward_accel = max(0.0, -float(accel_z))
+            if downward_accel < min_safe_accel:
+                downward_accel = 0
             downward_accel_penalty = self.downward_accel_weight * downward_accel
 
         self._prev_z_vel = float(self.data.qvel[2])
