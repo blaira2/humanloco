@@ -9,9 +9,16 @@ class BalanceHumanoidEnv(HumanoidEnv):
     Reward is based on staying alive, with a penalty for downward acceleration.
     """
 
-    def __init__(self, xml_file=None, downward_accel_weight=1.0, **kwargs):
+    def __init__(
+        self,
+        xml_file=None,
+        downward_accel_weight=1.0,
+        morph_params=None,
+        **kwargs,
+    ):
         self.downward_accel_weight = float(downward_accel_weight)
         self._prev_z_vel = None
+        self.morph = morph_params
 
         super().__init__(
             xml_file=xml_file,
@@ -24,6 +31,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
         self._prev_z_vel = None
+        info["morph_params"] = self.morph
         return obs, info
 
     def step(self, action):
@@ -44,5 +52,6 @@ class BalanceHumanoidEnv(HumanoidEnv):
 
         info["alive_reward"] = float(alive_reward)
         info["downward_accel_penalty"] = float(downward_accel_penalty)
+        info["morph_params"] = self.morph
 
         return obs, reward, terminated, truncated, info
