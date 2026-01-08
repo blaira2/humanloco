@@ -14,8 +14,8 @@ class BalanceHumanoidEnv(HumanoidEnv):
         xml_file=None,
         downward_accel_weight=0.015,
         energy_penalty_weight=0.04,
-        angular_velocity_penalty_weight=0.15,
-        com_alignment_weight=0.5,
+        angular_velocity_penalty_weight=0.04,
+        com_alignment_weight=0.3,
         morph_params=None,
         **kwargs,
     ):
@@ -96,7 +96,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         info["accel_penalty"] = float(downward_accel_penalty)
         info["energy_penalty"] = float(energy_penalty)
         info["angular_penalty"] = float(angular_velocity_penalty)
-        info["com_alignment_reward"] = float(com_alignment_reward)
+        info["com_penalty"] = float(-com_alignment_reward)
         info["morph_params"] = self.morph
 
         return obs, reward, terminated, truncated, info
