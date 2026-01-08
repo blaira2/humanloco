@@ -15,6 +15,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         downward_accel_weight=0.015,
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.15,
+        com_alignment_weight=0.5,
         morph_params=None,
         **kwargs,
     ):
@@ -23,6 +24,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         self.angular_velocity_penalty_weight = float(
             angular_velocity_penalty_weight
         )
+        self.com_alignment_weight = float(com_alignment_weight)
         self._prev_z_vel = None
         self._steps_alive = 0
         self.morph = morph_params
@@ -75,18 +77,26 @@ class BalanceHumanoidEnv(HumanoidEnv):
             * float(np.linalg.norm(self.data.qvel[3:6]))
         )
 
+        torso_body_id = self.model.body("torso").id
+        torso_xy = self.data.xipos[torso_body_id][:2]
+        com_xy = self.data.subtree_com[0][:2]
+        com_offset = float(np.linalg.norm(torso_xy - com_xy))
+        com_alignment_reward = self.com_alignment_weight * np.exp(-com_offset)
+
         reward = (
             alive_reward
             - downward_accel_penalty
             - terminal_penalty
             - energy_penalty
             - angular_velocity_penalty
+            + com_alignment_reward
         )
 
         info["alive_reward"] = float(alive_reward)
         info["accel_penalty"] = float(downward_accel_penalty)
         info["energy_penalty"] = float(energy_penalty)
         info["angular_penalty"] = float(angular_velocity_penalty)
+        info["com_alignment_reward"] = float(com_alignment_reward)
         info["morph_params"] = self.morph
 
         return obs, reward, terminated, truncated, info
