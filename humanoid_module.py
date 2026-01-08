@@ -168,7 +168,7 @@ def train_balance_env(
 
     # ---------- CREATE VEC ENV ----------
     env_fns = [
-        make_balance_env(xml_path, cfg, seed=i)
+        make_balance_env(xml_path, downward_accel_weight=0.05, morph_params=cfg, seed=i)
         for i in range(parallel_envs)
     ]
     if parallel_envs == 1:
@@ -233,12 +233,10 @@ def train_balance_env(
 
     debug_cb = RewardDebugCallback()
 
-    # ---------- callback for incrementing forward reward scale ----------
-    forward_cb = ForwardRampCallback(total_timesteps=timesteps)
 
     # ---------- TRAIN ----------
     print(f"\n🚀 Training PPO for {variant_name} ...")
-    model.learn(total_timesteps=timesteps, callback=[video_cb, debug_cb, forward_cb])
+    model.learn(total_timesteps=timesteps, callback=[video_cb, debug_cb])
 
     # ---------- SAVE ----------
     model.save(f"{variant_name}_ppo.zip")

@@ -51,7 +51,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         reward = alive_reward - downward_accel_penalty
 
         info["alive_reward"] = float(alive_reward)
-        info["downward_accel_penalty"] = float(downward_accel_penalty)
+        info["accel_penalty"] = float(downward_accel_penalty)
         info["morph_params"] = self.morph
 
         return obs, reward, terminated, truncated, info
