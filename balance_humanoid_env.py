@@ -18,6 +18,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
     ):
         self.downward_accel_weight = float(downward_accel_weight)
         self._prev_z_vel = None
+        self._steps_alive = 0
         self.morph = morph_params
 
         super().__init__(
@@ -31,13 +32,16 @@ class BalanceHumanoidEnv(HumanoidEnv):
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
         self._prev_z_vel = None
+        self._steps_alive = 0
         info["morph_params"] = self.morph
         return obs, info
 
     def step(self, action):
         obs, base_reward, terminated, truncated, info = super().step(action)
 
-        alive_reward = self.healthy_reward if not (terminated or truncated) else 0.0
+        alive_step = 1
+        self._steps_alive += 1
+        alive_reward = alive_step if not (terminated or truncated) else 0.0
 
         downward_accel_penalty = 0.0
         if self._prev_z_vel is not None:
