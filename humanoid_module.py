@@ -191,7 +191,7 @@ def train_balance_env(
     # learning
     final_lr = initial_learning_rate *.1
     lr_schedule = LinearSchedule(
-        start=5e-4,
+        start=1e-4,
         end=final_lr,
         end_fraction=.9
     )
@@ -419,6 +419,7 @@ class RewardDebugCallback(BaseCallback):
                 "lateral_penalty": 0.0,
                 "com_penalty": 0.0,
                 "angular_penalty": 0.0,
+                "velocity_penalty": 0.0,
                 "accel_penalty": 0.0,
                 "energy_penalty": 0.0,
                 "upright_reward": 0.0
@@ -442,6 +443,7 @@ class RewardDebugCallback(BaseCallback):
             s["com_penalty"] += info.get("com_penalty", 0.0)
             s["angular_penalty"] += info.get("angular_penalty", 0.0)
             s["accel_penalty"] += info.get("accel_penalty", 0.0)
+            s["velocity_penalty"] += info.get("velocity_penalty", 0.0)
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
             s["upright_reward"] += info.get("upright_reward", 0.0)
 
