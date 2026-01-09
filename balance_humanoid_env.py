@@ -69,18 +69,20 @@ class BalanceHumanoidEnv(HumanoidEnv):
         action = np.asarray(action)
         energy_penalty = self.energy_penalty_weight * (np.sum(action**2) / len(action))
 
-        angular_velocity_penalty = (
-            self.angular_velocity_penalty_weight
-            * float(np.linalg.norm(self.data.qvel[3:6]))
-        )
-
         torso_quat = self.data.xquat[1]
         w = float(torso_quat[0])
         tilt_angle = 2 * np.arccos(np.clip(abs(w), 0.0, 1.0))
         upright_reward = self.upright_reward_weight * np.exp(-tilt_angle)
 
+        #COM reward
         torso_body_id = self.model.body("torso").id
+        left_foot_id = self.model.body("left_foot").id
+        right_foot_id = self.model.body("right_foot").id
         torso_xy = self.data.xipos[torso_body_id][:2]
+        lf_xy = self.data.xipos[left_foot_id][:2]
+        rf_xy = self.data.xipos[right_foot_id][:2]
+        x_limits = (min(lf_xy[0], rf_xy[0]), max(lf_xy[0], rf_xy[0]))
+        y_limits = (min(lf_xy[1], rf_xy[1]), max(lf_xy[1], rf_xy[1]))
         com_xy = self.data.subtree_com[0][:2]
         com_offset = float(np.linalg.norm(torso_xy - com_xy))
         com_alignment_reward = self.com_alignment_weight * np.exp(-com_offset)
@@ -90,7 +92,6 @@ class BalanceHumanoidEnv(HumanoidEnv):
             - velocity_penalty
             - terminal_penalty
             - energy_penalty
-            - angular_velocity_penalty
             + com_alignment_reward
             + upright_reward
         )
@@ -98,7 +99,6 @@ class BalanceHumanoidEnv(HumanoidEnv):
         info["alive_reward"] = float(alive_reward)
         info["velocity_penalty"] = float(velocity_penalty)
         info["energy_penalty"] = float(energy_penalty)
-        info["angular_penalty"] = float(angular_velocity_penalty)
         info["com_penalty"] = float(-com_alignment_reward)
         info["upright_reward"] = float(upright_reward)
         info["morph_params"] = self.morph
