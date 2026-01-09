@@ -13,9 +13,9 @@ class BalanceHumanoidEnv(HumanoidEnv):
     def __init__(
         self,
         xml_file=None,
-        velocity_penalty_weight=0.01,
+        velocity_penalty_weight=0.02,
         energy_penalty_weight=0.04,
-        angular_velocity_penalty_weight=0.04,
+        angular_velocity_penalty_weight=0.06,
         com_alignment_weight=1,
         upright_reward_weight=0.2,
         com_progress_weight=0.5,
@@ -62,6 +62,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
 
+        #velocity penalties
         root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
         non_forward_components = np.array(
             [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
