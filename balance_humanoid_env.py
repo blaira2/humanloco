@@ -75,7 +75,6 @@ class BalanceHumanoidEnv(HumanoidEnv):
         upright_reward = self.upright_reward_weight * np.exp(-tilt_angle)
 
         #COM reward
-        com_outside_threshold = .1
         torso_body_id = self.model.body("torso").id
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
@@ -88,9 +87,8 @@ class BalanceHumanoidEnv(HumanoidEnv):
         dx_outside = max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1])
         dy_outside = max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1])
         com_outside_distance = float(np.hypot(dx_outside, dy_outside))
-        com_alignment_reward = self.com_alignment_weight * (
-                1.0 - (com_outside_distance / com_outside_threshold)
-        )
+        com_alignment_reward = self.com_alignment_weight * (1.0 - com_outside_distance)
+        
 
         reward = (
             alive_reward
