@@ -16,9 +16,9 @@ class BalanceHumanoidEnv(HumanoidEnv):
         velocity_penalty_weight=0.01,
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.04,
-        com_alignment_weight=0.3,
-        upright_reward_weight=0.4,
-        com_progress_weight=0.2,
+        com_alignment_weight=1,
+        upright_reward_weight=0.2,
+        com_progress_weight=0.5,
         morph_params=None,
         **kwargs,
     ):
@@ -57,7 +57,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         alive_reward = alive_step if not (terminated or truncated) else 0.0
         # terminal penalty shrinks over time
         survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
-        max_penalty = 120.0
+        max_penalty = 100.0
         terminal_penalty = max_penalty * (1.0 - survival_frac)
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0

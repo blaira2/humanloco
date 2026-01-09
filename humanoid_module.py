@@ -440,7 +440,7 @@ class RewardDebugCallback(BaseCallback):
             s["forward"] += info.get("forward_reward", 0.0)
             s["alive"] += info.get("alive_reward", 0.0)
             s["lateral_penalty"] += info.get("lateral_penalty", 0.0)
-            s["com_reward"] += info.get("com_penalty", 0.0)
+            s["com_reward"] += info.get("com_reward", 0.0)
             s["angular_penalty"] += info.get("angular_penalty", 0.0)
             s["accel_penalty"] += info.get("accel_penalty", 0.0)
             s["velocity_penalty"] += info.get("velocity_penalty", 0.0)
