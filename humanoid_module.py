@@ -421,6 +421,7 @@ class RewardDebugCallback(BaseCallback):
                 "angular_penalty": 0.0,
                 "accel_penalty": 0.0,
                 "energy_penalty": 0.0,
+                "upright_reward": 0.0
             })
 
     def _on_step(self) -> bool:
@@ -442,6 +443,7 @@ class RewardDebugCallback(BaseCallback):
             s["angular_penalty"] += info.get("angular_penalty", 0.0)
             s["accel_penalty"] += info.get("accel_penalty", 0.0)
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
+            s["upright_reward"] += info.get("upright_reward", 0.0)
 
             self.ep_len[i] += 1
 
@@ -452,11 +454,13 @@ class RewardDebugCallback(BaseCallback):
                     f"R_mean={s['total'] / L: .3f} | "
                     f"fwd={s['forward'] / L: .3f} | "
                     f"alive={s['alive'] / L: .3f} | "
+                    f"upright={s['upright_reward'] / L: .3f} | "
                     f"lat_p={s['lateral_penalty'] / L: .3f} | "
                     f"accel_p={s['accel_penalty'] / L: .3f} | "
                     f"com_p={s['com_penalty'] / L: .3f} | "
                     f"ang_p={s['angular_penalty'] / L: .3f} | "
                     f"energy_p={s['energy_penalty'] / L: .3f}"
+
                 )
 
                 # reset for next episode
