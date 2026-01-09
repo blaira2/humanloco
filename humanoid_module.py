@@ -98,12 +98,13 @@ def make_balance_env(xml_file, morph_params=None, seed=0):
     return _init
 
 class VideoEveryNEpisodesCallback(BaseCallback):
-    def __init__(self, video_every, xml_file, morph, out_dir, verbose=0):
+    def __init__(self, video_every, xml_file, morph, out_dir, env_cls=MorphHumanoidEnv, verbose=0):
         super().__init__(verbose)
         self.video_every = video_every
         self.xml_file = xml_file
         self.morph = morph
         self.out_dir = out_dir
+        self.env_cls = env_cls
         os.makedirs(out_dir, exist_ok=True)
         self.episode_count = 0
 
@@ -127,7 +128,7 @@ class VideoEveryNEpisodesCallback(BaseCallback):
         os.makedirs(video_folder, exist_ok=True)
 
         # Create a recordable environment
-        env = MorphHumanoidEnv(
+        env = self.env_cls(
             xml_file=self.xml_file,
             morph_params=self.morph,
             render_mode="rgb_array"
@@ -227,7 +228,8 @@ def train_balance_env(
         video_every=video_every,
         xml_file=xml_path,
         morph=cfg,
-        out_dir=f"{variant_name}_videos"
+        out_dir=f"{variant_name}_videos",
+        env_cls=BalanceHumanoidEnv,
     )
 
     debug_cb = RewardDebugCallback()
@@ -318,7 +320,8 @@ def train_variant(
         video_every=video_every,
         xml_file=xml_path,
         morph=cfg,
-        out_dir=f"{variant_name}_videos"
+        out_dir=f"{variant_name}_videos",
+        env_cls=MorphHumanoidEnv,
     )
 
     debug_cb = RewardDebugCallback()
