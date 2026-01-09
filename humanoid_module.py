@@ -417,7 +417,7 @@ class RewardDebugCallback(BaseCallback):
                 "forward": 0.0,
                 "alive": 0.0,
                 "lateral_penalty": 0.0,
-                "com_penalty": 0.0,
+                "com_reward": 0.0,
                 "angular_penalty": 0.0,
                 "velocity_penalty": 0.0,
                 "accel_penalty": 0.0,
@@ -440,7 +440,7 @@ class RewardDebugCallback(BaseCallback):
             s["forward"] += info.get("forward_reward", 0.0)
             s["alive"] += info.get("alive_reward", 0.0)
             s["lateral_penalty"] += info.get("lateral_penalty", 0.0)
-            s["com_penalty"] += info.get("com_penalty", 0.0)
+            s["com_reward"] += info.get("com_penalty", 0.0)
             s["angular_penalty"] += info.get("angular_penalty", 0.0)
             s["accel_penalty"] += info.get("accel_penalty", 0.0)
             s["velocity_penalty"] += info.get("velocity_penalty", 0.0)
@@ -456,10 +456,10 @@ class RewardDebugCallback(BaseCallback):
                     f"R_mean={s['total'] / L: .3f} | "
                     f"fwd={s['forward'] / L: .3f} | "
                     f"alive={s['alive'] / L: .3f} | "
+                    f"com={s['com_reward'] / L: .3f} | "
                     f"upright={s['upright_reward'] / L: .3f} | "
                     f"lat_p={s['velocity_penalty'] / L: .3f} | "
                     f"accel_p={s['accel_penalty'] / L: .3f} | "
-                    f"com_p={s['com_penalty'] / L: .3f} | "
                     f"ang_p={s['angular_penalty'] / L: .3f} | "
                     f"energy_p={s['energy_penalty'] / L: .3f}"
 
