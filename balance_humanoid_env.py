@@ -69,6 +69,10 @@ class BalanceHumanoidEnv(HumanoidEnv):
         )
         non_forward_speed = np.linalg.norm(non_forward_components)
         velocity_penalty = self.velocity_penalty_weight * non_forward_speed
+        root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
+        angular_velocity_penalty = (
+            self.angular_velocity_penalty_weight * np.linalg.norm(root_ang_vel)
+        )
 
         action = np.asarray(action)
         energy_penalty = self.energy_penalty_weight * (np.sum(action**2) / len(action))
@@ -112,6 +116,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
             + com_alignment_reward
             + upright_reward
             - velocity_penalty
+            - angular_velocity_penalty
             - terminal_penalty
             - energy_penalty
         )
@@ -120,6 +125,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         info["velocity_penalty"] = float(velocity_penalty)
         info["energy_penalty"] = float(energy_penalty)
         info["com_reward"] = float(com_alignment_reward)
+        info["angular_penalty"] = float(angular_velocity_penalty)
         info["upright_reward"] = float(upright_reward)
         info["morph_params"] = self.morph
 
