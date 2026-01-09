@@ -96,22 +96,20 @@ class BalanceHumanoidEnv(HumanoidEnv):
         dx_outside = max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1])
         dy_outside = max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1])
         com_outside_distance = float(np.hypot(dx_outside, dy_outside))
-
         com_alignment_reward = self.com_alignment_weight * (1.0 - com_outside_distance)
         
         if self._prev_com_distance is None:
             com_progress_reward = 0.0
         else:
-            com_progress_reward = self.com_progress_weight * (
-                self._prev_com_distance - com_distance
-            )
+            com_progress_reward = (self.com_progress_weight * (self._prev_com_distance - com_distance ))
         self._prev_com_distance = com_distance
+
+        com_alignment_reward += com_progress_reward
 
 
         reward = (
             alive_reward
             + com_alignment_reward
-            + com_progress_reward
             + upright_reward
             - velocity_penalty
             - terminal_penalty
@@ -122,7 +120,6 @@ class BalanceHumanoidEnv(HumanoidEnv):
         info["velocity_penalty"] = float(velocity_penalty)
         info["energy_penalty"] = float(energy_penalty)
         info["com_reward"] = float(com_alignment_reward)
-        info["com_progress_reward"] = float(com_progress_reward)
         info["upright_reward"] = float(upright_reward)
         info["morph_params"] = self.morph
 
