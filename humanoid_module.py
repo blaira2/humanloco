@@ -455,7 +455,7 @@ class RewardDebugCallback(BaseCallback):
                     f"fwd={s['forward'] / L: .3f} | "
                     f"alive={s['alive'] / L: .3f} | "
                     f"upright={s['upright_reward'] / L: .3f} | "
-                    f"lat_p={s['lateral_penalty'] / L: .3f} | "
+                    f"lat_p={s['velocity_penalty'] / L: .3f} | "
                     f"accel_p={s['accel_penalty'] / L: .3f} | "
                     f"com_p={s['com_penalty'] / L: .3f} | "
                     f"ang_p={s['angular_penalty'] / L: .3f} | "
