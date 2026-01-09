@@ -13,7 +13,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
     def __init__(
         self,
         xml_file=None,
-        downward_accel_weight=0.015,
+        velocity_penalty_weight=0.01,
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.04,
         com_alignment_weight=0.3,
@@ -21,14 +21,13 @@ class BalanceHumanoidEnv(HumanoidEnv):
         morph_params=None,
         **kwargs,
     ):
-        self.downward_accel_weight = float(downward_accel_weight)
+        self.velocity_penalty_weight = float(velocity_penalty_weight)
         self.energy_penalty_weight = float(energy_penalty_weight)
         self.angular_velocity_penalty_weight = float(
             angular_velocity_penalty_weight
         )
         self.com_alignment_weight = float(com_alignment_weight)
         self.upright_reward_weight = float(upright_reward_weight)
-        self._prev_z_vel = None
         self._steps_alive = 0
         self.morph = morph_params
 
@@ -42,7 +41,6 @@ class BalanceHumanoidEnv(HumanoidEnv):
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
-        self._prev_z_vel = None
         self._steps_alive = 0
         info["morph_params"] = self.morph
         return obs, info
@@ -60,17 +58,13 @@ class BalanceHumanoidEnv(HumanoidEnv):
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
 
-        downward_accel_penalty = 0.0
-        min_safe_accel = 1.0;
-        if self._prev_z_vel is not None:
-            dt = self.model.opt.timestep
-            accel_z = (self.data.qvel[2] - self._prev_z_vel) / dt
-            downward_accel = max(0.0, -float(accel_z))
-            if downward_accel < min_safe_accel:
-                downward_accel = 0
-            downward_accel_penalty = self.downward_accel_weight * downward_accel
-
-        self._prev_z_vel = float(self.data.qvel[2])
+        root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
+        non_forward_components = np.array(
+            [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
+            dtype=float,
+        )
+        non_forward_speed = np.linalg.norm(non_forward_components)
+        velocity_penalty = self.velocity_penalty_weight * non_forward_speed
 
         action = np.asarray(action)
         energy_penalty = self.energy_penalty_weight * (np.sum(action**2) / len(action))
@@ -93,7 +87,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
 
         reward = (
             alive_reward
-            - downward_accel_penalty
+            - velocity_penalty
             - terminal_penalty
             - energy_penalty
             - angular_velocity_penalty
@@ -102,7 +96,7 @@ class BalanceHumanoidEnv(HumanoidEnv):
         )
 
         info["alive_reward"] = float(alive_reward)
-        info["accel_penalty"] = float(downward_accel_penalty)
+        info["velocity_penalty"] = float(velocity_penalty)
         info["energy_penalty"] = float(energy_penalty)
         info["angular_penalty"] = float(angular_velocity_penalty)
         info["com_penalty"] = float(-com_alignment_reward)
