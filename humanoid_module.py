@@ -2,7 +2,7 @@
 import numpy as np
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, VecVideoRecorder
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import configure
@@ -154,6 +154,10 @@ policy_kwargs = dict( # MLP
         net_arch=[128, 96, 64]  # 3 hidden layers shared by pi & vf
     )
 
+sac_policy_kwargs = dict( # MLP for SAC (actor/critic)
+        net_arch=[256, 256]
+    )
+
 def train_balance_env(
         variant_name,
         cfg,
@@ -241,6 +245,99 @@ def train_balance_env(
 
     # ---------- SAVE ----------
     model.save(f"{variant_name}_ppo.zip")
+    vec_env.close()
+    print(f"✔️ Training complete for {variant_name}")
+
+    return model
+
+def train_balance_env_sac(
+        variant_name,
+        cfg,
+        xml_file,
+        timesteps=300_000,
+        parallel_envs=3,
+        initial_learning_rate=3e-4,
+        video_every=10,
+        pretrained_model=None):
+
+    xml_path = os.path.abspath(xml_file)
+
+    # ---------- CREATE VEC ENV ----------
+    env_fns = [
+        make_balance_env(xml_path, morph_params=cfg, seed=i)
+        for i in range(parallel_envs)
+    ]
+    if parallel_envs == 1:
+        vec_env = DummyVecEnv(env_fns)
+    else:
+        vec_env = SubprocVecEnv(env_fns)
+    # Normalize observations and rewards
+    vec_env = VecNormalize(
+        vec_env,
+        norm_obs=False,
+        norm_reward=False,
+        clip_obs=10.0,
+        clip_reward=10.0,
+    )
+    vec_env = VecMonitor(vec_env)
+    vec_env.save(f"./norms/{variant_name}_vecnorm.pkl")
+
+    # ---------- LOGGER ----------
+    logger = configure(folder=f"./logs_{variant_name}", format_strings=["stdout", "csv", "tensorboard"])
+
+    # learning
+    final_lr = initial_learning_rate * 0.1
+    lr_schedule = LinearSchedule(
+        start=initial_learning_rate,
+        end=final_lr,
+        end_fraction=0.9
+    )
+
+    # ---------- MODEL ----------
+    if pretrained_model is None:
+        model = SAC(
+            "MlpPolicy",
+            vec_env,
+            policy_kwargs=sac_policy_kwargs,
+            learning_rate=lr_schedule,
+            buffer_size=1_000_000,
+            batch_size=256,
+            gamma=0.99,
+            tau=0.005,
+            train_freq=1,
+            gradient_steps=1,
+            learning_starts=10_000,
+            ent_coef="auto",
+            verbose=1
+        )
+    elif isinstance(pretrained_model, (str, os.PathLike)):
+        model = SAC.load(pretrained_model, env=vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
+    else:
+        model = pretrained_model
+        model.set_env(vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
+    model.set_logger(logger)
+
+    # ---------- CALLBACK FOR VIDEO ----------
+    video_cb = VideoEveryNEpisodesCallback(
+        video_every=video_every,
+        xml_file=xml_path,
+        morph=cfg,
+        out_dir=f"{variant_name}_videos",
+        env_cls=BalanceHumanoidEnv,
+    )
+
+    debug_cb = RewardDebugCallback()
+
+    # ---------- TRAIN ----------
+    print(f"\n🚀 Training SAC for {variant_name} ...")
+    model.learn(total_timesteps=timesteps, callback=[video_cb, debug_cb])
+
+    # ---------- SAVE ----------
+    model.save(f"{variant_name}_sac.zip")
     vec_env.close()
     print(f"✔️ Training complete for {variant_name}")
 
