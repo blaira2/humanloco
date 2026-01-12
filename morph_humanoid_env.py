@@ -40,6 +40,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         upper_height = torso + head  # hip -> head distance
         standing_height = self.base_height + upper_height
         self.start_height = compute_start_height(morph_params)
+        self._prev_com_distance = None
 
         # Store for debugging
         self.morph_standing_height = standing_height
@@ -142,29 +143,41 @@ class MorphHumanoidEnv(HumanoidEnv):
             forward_axis = np.array([1.0, 0.0, 0.0])
             forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
             non_forward_accel = accel - forward_accel * forward_axis
-            accel_penalty = 0.05 * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
+            accel_penalty = 0.03 * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
         self._prev_qvel = self.data.qvel.copy()
 
         # sideways = discourage strafing
         lateral_penalty = 0.25 * abs(y_vel)
 
-        # --- Center of mass and feet geometry ---
-        com = np.array(self.data.subtree_com[self.torso_body_id])  # [x, y, z]
-        com_xy = com[:2]
-        lf_xy = self.data.xipos[self.left_foot_body_id, :2]
-        rf_xy = self.data.xipos[self.right_foot_body_id, :2]
-        feet_mid = 0.5 * (lf_xy + rf_xy)
-        # is com near any balance point
-        d_left = np.linalg.norm(com_xy - lf_xy)
-        d_right = np.linalg.norm(com_xy - rf_xy)
-        d_mid = np.linalg.norm(com_xy - feet_mid)
-        d_min = float(min(d_left, d_right, d_mid))
-        d_excess = max(1e-4, d_min - 0.1)
-        d_min_dt = (d_excess - self.prev_com_margin) / self.model.opt.timestep
-        self.prev_com_margin = d_excess
-        com_penalty = 0.3 * d_min_dt
-        if com_penalty < 0:
-            com_penalty = 0.75 * com_penalty  # weaker reward than penalty
+        # COM reward
+        com_alignment_weight = 1
+        com_progress_weight = .4
+        torso_body_id = self.model.body("torso").id
+        left_foot_id = self.model.body("left_foot").id
+        right_foot_id = self.model.body("right_foot").id
+        torso_xy = self.data.xipos[torso_body_id][:2]
+        lf_xy = self.data.xipos[left_foot_id][:2]
+        rf_xy = self.data.xipos[right_foot_id][:2]
+        x_limits = (min(lf_xy[0], rf_xy[0]), max(lf_xy[0], rf_xy[0]))
+        y_limits = (min(lf_xy[1], rf_xy[1]), max(lf_xy[1], rf_xy[1]))
+        support_center = np.array(
+            [(x_limits[0] + x_limits[1]) / 2.0, (y_limits[0] + y_limits[1]) / 2.0],
+            dtype=float,
+        )
+        com_xy = self.data.subtree_com[0][:2]
+        com_distance = float(np.linalg.norm(com_xy - support_center))
+        dx_outside = max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1])
+        dy_outside = max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1])
+        com_outside_distance = float(np.hypot(dx_outside, dy_outside))
+        com_alignment_reward = com_alignment_weight * (1.0 - com_outside_distance)
+
+        if self._prev_com_distance is None:
+            com_progress_reward = 0.0
+        else:
+            com_progress_reward = (com_progress_weight * (self._prev_com_distance - com_distance))
+        self._prev_com_distance = com_distance
+
+        com_alignment_reward += com_progress_reward
 
         # angular velocity penalty
         angular_penalty = 0.05 * np.linalg.norm(ang_vel[:2])  # pitch/roll wobble
@@ -174,19 +187,19 @@ class MorphHumanoidEnv(HumanoidEnv):
         reward = (
             alive_reward
             + forward_reward
+            + com_alignment_reward
             - terminal_penalty
             - lateral_penalty
             - accel_penalty
             - angular_penalty
             - energy_penalty
-            - com_penalty
         )
 
         info["energy_penalty"] = float(energy_penalty)
         info["forward_reward"] = float(forward_reward)
         info["lateral_penalty"] = float(lateral_penalty)
         info["accel_penalty"] = float(accel_penalty)
-        info["com_penalty"] = float(com_penalty)
+        info["com_reward"] = float(com_alignment_reward)
         info["angular_penalty"] = float(angular_penalty)
         info["alive_reward"] = float(alive_reward)
 
@@ -201,6 +214,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._steps_alive = 0
         self._prev_action = None
         self._prev_qvel = None
+        self._prev_com_distance = None
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
