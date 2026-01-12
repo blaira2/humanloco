@@ -1,7 +1,7 @@
 
 import numpy as np
 import gymnasium as gym
-from gymnasium.wrappers import RecordVideo
+from gymnasium.wrappers import RecordVideo, TimeLimit
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, VecVideoRecorder
 from stable_baselines3.common.callbacks import BaseCallback
@@ -74,37 +74,49 @@ def preview(xml):
     env.close()
 
 
-def make_env(xml_file, morph_params, seed=0):
+def make_env(xml_file, morph_params, seed=0, max_episode_steps=1000):
     def _init():
         env = MorphHumanoidEnv(
             xml_file=xml_file,
             morph_params=morph_params,
             render_mode=None        # IMPORTANT: no rendering in training
         )
+        env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env.reset(seed=seed)
         return env
     return _init
 
 
-def make_balance_env(xml_file, morph_params=None, seed=0):
+def make_balance_env(xml_file, morph_params=None, seed=0, max_episode_steps=1000):
     def _init():
         env = BalanceHumanoidEnv(
             xml_file=xml_file,
             morph_params=morph_params,
             render_mode=None,  # IMPORTANT: no rendering in training
         )
+        env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env.reset(seed=seed)
         return env
     return _init
 
 class VideoEveryNEpisodesCallback(BaseCallback):
-    def __init__(self, video_every, xml_file, morph, out_dir, env_cls=MorphHumanoidEnv, verbose=0):
+    def __init__(
+        self,
+        video_every,
+        xml_file,
+        morph,
+        out_dir,
+        env_cls=MorphHumanoidEnv,
+        max_episode_steps=1000,
+        verbose=0,
+    ):
         super().__init__(verbose)
         self.video_every = video_every
         self.xml_file = xml_file
         self.morph = morph
         self.out_dir = out_dir
         self.env_cls = env_cls
+        self.max_episode_steps = max_episode_steps
         os.makedirs(out_dir, exist_ok=True)
         self.episode_count = 0
 
@@ -133,6 +145,7 @@ class VideoEveryNEpisodesCallback(BaseCallback):
             morph_params=self.morph,
             render_mode="rgb_array"
         )
+        env = TimeLimit(env, max_episode_steps=self.max_episode_steps)
         env = VecVideoRecorder(
             DummyVecEnv([lambda: env]),
             video_folder,
@@ -166,13 +179,19 @@ def train_balance_env(
         parallel_envs=3,
         initial_learning_rate=2e-4,
         video_every=10,
+        max_episode_steps=1000,
         pretrained_model=None):
 
     xml_path = os.path.abspath(xml_file)
 
     # ---------- CREATE VEC ENV ----------
     env_fns = [
-        make_balance_env(xml_path, morph_params=cfg, seed=i)
+        make_balance_env(
+            xml_path,
+            morph_params=cfg,
+            seed=i,
+            max_episode_steps=max_episode_steps,
+        )
         for i in range(parallel_envs)
     ]
     if parallel_envs == 1:
@@ -234,6 +253,7 @@ def train_balance_env(
         morph=cfg,
         out_dir=f"{variant_name}_videos",
         env_cls=BalanceHumanoidEnv,
+        max_episode_steps=max_episode_steps,
     )
 
     debug_cb = RewardDebugCallback()
@@ -258,13 +278,19 @@ def train_balance_env_sac(
         parallel_envs=3,
         initial_learning_rate=3e-4,
         video_every=10,
+        max_episode_steps=1000,
         pretrained_model=None):
 
     xml_path = os.path.abspath(xml_file)
 
     # ---------- CREATE VEC ENV ----------
     env_fns = [
-        make_balance_env(xml_path, morph_params=cfg, seed=i)
+        make_balance_env(
+            xml_path,
+            morph_params=cfg,
+            seed=i,
+            max_episode_steps=max_episode_steps,
+        )
         for i in range(parallel_envs)
     ]
     if parallel_envs == 1:
@@ -328,6 +354,7 @@ def train_balance_env_sac(
         morph=cfg,
         out_dir=f"{variant_name}_videos",
         env_cls=BalanceHumanoidEnv,
+        max_episode_steps=max_episode_steps,
     )
 
     debug_cb = RewardDebugCallback()
@@ -351,13 +378,14 @@ def train_variant(
         parallel_envs=3,
         initial_learning_rate=2e-4,
         video_every=10,
+        max_episode_steps=1000,
         pretrained_model=None):
 
     xml_path = os.path.abspath(xml_file)
 
     # ---------- CREATE VEC ENV ----------
     env_fns = [
-        make_env(xml_path, cfg, seed=i)
+        make_env(xml_path, cfg, seed=i, max_episode_steps=max_episode_steps)
         for i in range(parallel_envs)
     ]
     if parallel_envs == 1:
@@ -419,6 +447,7 @@ def train_variant(
         morph=cfg,
         out_dir=f"{variant_name}_videos",
         env_cls=MorphHumanoidEnv,
+        max_episode_steps=max_episode_steps,
     )
 
     debug_cb = RewardDebugCallback()
@@ -438,9 +467,17 @@ def train_variant(
     return model
 
 
-def collect_trajectories(model, variant_name, cfg, num_episodes=15):
+def collect_trajectories(
+    model,
+    variant_name,
+    cfg,
+    num_episodes=15,
+    max_episode_steps=1000,
+):
     xml_path = os.path.abspath(cfg["xml"])
-    base_env = DummyVecEnv([make_env(xml_path, cfg, seed=0)])
+    base_env = DummyVecEnv(
+        [make_env(xml_path, cfg, seed=0, max_episode_steps=max_episode_steps)]
+    )
     # ----- Try to load VecNormalize stats -----
     vecnorm_path = f"./norms/{variant_name}_vecnorm.pkl"
     if os.path.exists(vecnorm_path):
