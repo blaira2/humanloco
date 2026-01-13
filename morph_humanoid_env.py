@@ -1,18 +1,72 @@
 import numpy as np
 import mujoco as mj
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
+import xml.etree.ElementTree as ET
 
 
-def compute_start_height(params):
+def compute_start_height(params, base_height=None):
     """
     Compute correct starting torso height so feet rest on the floor.
     """
-    thigh = params["THIGH_LENGTH"]
-    shin = params["SHIN_LENGTH"]
-    foot = params["FOOT_RADIUS"]
+    if base_height is None:
+        thigh = params["THIGH_LENGTH"]
+        shin = params["SHIN_LENGTH"]
+        foot = params["FOOT_RADIUS"]
+        base_height = thigh + shin + foot
 
     safety = 0.14  # extra buffer so initial state avoids penetration
-    return thigh + shin + foot + safety
+    return base_height + safety
+
+
+def calculate_base_height_from_xml(xml_file, leg_side="right"):
+    """
+    Calculate the vertical base height from the torso to the foot using the XML.
+    """
+    try:
+        tree = ET.parse(xml_file)
+    except (FileNotFoundError, ET.ParseError):
+        return None
+
+    root = tree.getroot()
+    worldbody = root.find("worldbody")
+    if worldbody is None:
+        return None
+
+    torso_body = worldbody.find("./body[@name='torso']")
+    if torso_body is None:
+        return None
+
+    chain = [
+        "lwaist",
+        "pelvis",
+        f"{leg_side}_thigh",
+        f"{leg_side}_shin",
+        f"{leg_side}_foot",
+    ]
+
+    base_height = 0.0
+    current = torso_body
+    for body_name in chain:
+        next_body = None
+        for child in current.findall("body"):
+            if child.attrib.get("name") == body_name:
+                next_body = child
+                break
+        if next_body is None:
+            return None
+        pos = next_body.attrib.get("pos", "0 0 0")
+        pos_z = float(pos.split()[2])
+        base_height += abs(pos_z)
+        current = next_body
+
+    foot_geom = current.find("geom")
+    if foot_geom is not None:
+        size = foot_geom.attrib.get("size")
+        if size:
+            radius = float(size.split()[0])
+            base_height += radius
+
+    return base_height
 
 
 class MorphHumanoidEnv(HumanoidEnv):
@@ -36,11 +90,12 @@ class MorphHumanoidEnv(HumanoidEnv):
         head = morph_params.get("HEAD_HEIGHT", 0.45)
         foot = morph_params.get("FOOT_RADIUS", 0.075)
 
-        self.base_height = thigh + shin + foot  # hip -> ground distance
+        xml_base_height = calculate_base_height_from_xml(xml_file)
+        self.base_height = xml_base_height if xml_base_height is not None else thigh + shin + foot
         print(f"calculated base height: {self.base_height} ")
         upper_height = torso + head  # hip -> head distance
         standing_height = self.base_height + upper_height
-        self.start_height = compute_start_height(morph_params)
+        self.start_height = compute_start_height(morph_params, base_height=self.base_height)
         self._prev_com_distance = None
 
         # Store for debugging
