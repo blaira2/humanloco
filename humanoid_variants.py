@@ -94,16 +94,16 @@ VARIANTS = {
     ),
     "test_var": dict(
         xml="humanoid_custom.xml",
-        TORSO_RADIUS=0.12,
-        TORSO_HALF=0.35,
-        TORSO_LENGTH=0.7,
+        TORSO_RADIUS=0.13,
+        TORSO_HALF=0.3,
+        TORSO_LENGTH=0.6,
 
         HEAD_RADIUS=0.11,
         HEAD_HEIGHT=0.45,
 
         HIP_OFFSET=0.1,
-        THIGH_LENGTH=0.4,
-        SHIN_LENGTH=0.4,
+        THIGH_LENGTH=0.2,
+        SHIN_LENGTH=0.2,
         THIGH_RADIUS=0.06,
         SHIN_RADIUS=0.05,
 

@@ -37,6 +37,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         foot = morph_params.get("FOOT_RADIUS", 0.075)
 
         self.base_height = thigh + shin + foot  # hip -> ground distance
+        print(f"calculated base height: {self.base_height} ")
         upper_height = torso + head  # hip -> head distance
         standing_height = self.base_height + upper_height
         self.start_height = compute_start_height(morph_params)
