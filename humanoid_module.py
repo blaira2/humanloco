@@ -493,7 +493,7 @@ def train_variant_sac(
         xml_file=xml_path,
         morph=cfg,
         out_dir=f"{variant_name}_videos",
-        env_cls=BalanceHumanoidEnv,
+        env_cls=MorphHumanoidEnv,
         max_episode_steps=max_episode_steps,
     )
 

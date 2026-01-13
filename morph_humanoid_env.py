@@ -103,7 +103,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         # stay healthy
         self._steps_alive = 0  # counts how many steps we stay alive
 
-        self.forward_scale = 0.25
         self.prev_com_margin = 0
 
         super().__init__(
@@ -136,10 +135,12 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs, base_reward, terminated, truncated, info = super().step(action)
 
         #Reward weights
-        com_alignment_weight = .2
-        com_progress_weight = .4
-        accel_weight = 0.03
+        forward_weight = 4
+        com_alignment_weight = .1
+        com_progress_weight = .2
+        accel_weight = 0.008
         lateral_weight = 0.03
+        angular_weight = 0.05
 
 
         # Base kinematics
@@ -165,7 +166,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         # Forward reward
         # reward grows with speed but saturates, and is posture-gated
         x_vel_clipped = min(x_vel, 3.0)  # cap speed for reward purposes
-        forward_base = self.forward_scale * x_vel_clipped
+        forward_reward = forward_weight * x_vel_clipped
 
         # energy penalty = discourage huge torques
         action = np.asarray(action)
@@ -173,7 +174,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         n = len(action)
         energy_penalty = 1 * (energy / n)
 
-        forward_reward = 5 * forward_base
 
         # -----------------
         # Minor Penalties
@@ -222,7 +222,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         com_alignment_reward += com_progress_reward
 
         # angular velocity penalty
-        angular_penalty = 0.05 * np.linalg.norm(ang_vel[:2])  # pitch/roll wobble
+        angular_penalty = angular_weight * np.linalg.norm(ang_vel[:2])  # pitch/roll wobble
 
         # Combine
 
