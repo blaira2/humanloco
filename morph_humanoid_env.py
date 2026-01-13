@@ -81,40 +81,21 @@ class MorphHumanoidEnv(HumanoidEnv):
     def __init__(self, xml_file, morph_params, **kwargs):
         self.morph = morph_params
 
-        # -----------------------------
-        # Compute morphology-based torso height
-        # -----------------------------
-        thigh = morph_params.get("THIGH_LENGTH", 0.34)
-        shin = morph_params.get("SHIN_LENGTH", 0.30)
-        torso = morph_params.get("TORSO_LENGTH", 0.70)
-        head = morph_params.get("HEAD_HEIGHT", 0.45)
-        foot = morph_params.get("FOOT_RADIUS", 0.075)
-
         xml_base_height = calculate_base_height_from_xml(xml_file)
-        self.base_height = xml_base_height if xml_base_height is not None else thigh + shin + foot
+        self.base_height = xml_base_height if xml_base_height is not None else 1
         print(f"calculated base height: {self.base_height} ")
-        upper_height = torso + head  # hip -> head distance
-        standing_height = self.base_height + upper_height
+
         self.start_height = compute_start_height(morph_params, base_height=self.base_height)
         self._prev_com_distance = None
 
         # Store for debugging
-        self.morph_standing_height = standing_height
         self._prev_action = None
         self._prev_qvel = None
         # -----------------------------
         # Compute robust healthy_z_range
         # -----------------------------
-        # Instead of:
-        #   healthy if standing_height * 0.5 < z < standing_height * 1.5
-        #
-        # Use:
-        #   • Torso must be ABOVE 20% of standing height
-        #   • Torso must be BELOW 200% (sanity)
-        #   • Allows crouching/kneeling but not lying flat
-        #
-        min_healthy = 0.15 * standing_height
-        max_healthy = 2.0 * standing_height
+        min_healthy = 0.15 * self.base_height
+        max_healthy = 2.0 * self.base_height
 
         self.custom_healthy_min = min_healthy
         self.custom_healthy_max = max_healthy
@@ -147,21 +128,27 @@ class MorphHumanoidEnv(HumanoidEnv):
         # -----------------------------
         # 3. Additional robustness parameters
         # -----------------------------
-        self.max_tilt = np.deg2rad(70)  # if torso tilts >70°, consider fallen
+        self.max_tilt = np.deg2rad(90)  # if torso tilts below horizontal, consider fallen
         self.min_base_height = 0.03  # if the pelvis hits the floor → terminal
 
     def step(self, action):
         # ---- call original HumanoidEnv step ----
         obs, base_reward, terminated, truncated, info = super().step(action)
 
-        # ----------------------
+        #Reward weights
+        com_alignment_weight = .2
+        com_progress_weight = .4
+        accel_weight = 0.03
+        lateral_weight = 0.03
+
+
         # Base kinematics
-        # ----------------------
         x_vel = float(self.data.qvel[0])  # forward speed
         y_vel = float(self.data.qvel[1])  # lateral speed
         z_vel = float(self.data.qvel[2])  # downward speed
         x_vel = max(x_vel, 0.0)  # no reward for walking backwards
         ang_vel = self.data.qvel[3:6]  # angular vel
+
 
         # Alive reward
         # small constant per timestep + big penalty on fall
@@ -199,15 +186,14 @@ class MorphHumanoidEnv(HumanoidEnv):
             forward_axis = np.array([1.0, 0.0, 0.0])
             forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
             non_forward_accel = accel - forward_accel * forward_axis
-            accel_penalty = 0.03 * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
+            accel_penalty = accel_weight * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
         self._prev_qvel = self.data.qvel.copy()
 
         # sideways = discourage strafing
-        lateral_penalty = 0.25 * abs(y_vel)
+        lateral_penalty = lateral_weight * abs(y_vel)
 
         # COM reward
-        com_alignment_weight = 1
-        com_progress_weight = .4
+
         torso_body_id = self.model.body("torso").id
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
