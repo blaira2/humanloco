@@ -135,10 +135,11 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs, base_reward, terminated, truncated, info = super().step(action)
 
         #Reward weights
-        forward_weight = 4
+        forward_weight = 5
         com_alignment_weight = .1
         com_progress_weight = .2
-        accel_weight = 0.008
+        energy_weight = .8
+        accel_weight = 0.005
         lateral_weight = 0.03
         angular_weight = 0.05
 
@@ -172,7 +173,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         action = np.asarray(action)
         energy = np.sum(action**2)
         n = len(action)
-        energy_penalty = 1 * (energy / n)
+        energy_penalty = energy_weight * (energy / n)
 
 
         # -----------------
@@ -186,7 +187,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             forward_axis = np.array([1.0, 0.0, 0.0])
             forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
             non_forward_accel = accel - forward_accel * forward_axis
-            accel_penalty = accel_weight * (1 - self.forward_scale) * np.linalg.norm(non_forward_accel)
+            accel_penalty = accel_weight * np.linalg.norm(non_forward_accel)
         self._prev_qvel = self.data.qvel.copy()
 
         # sideways = discourage strafing
@@ -303,8 +304,6 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         return True
 
-    def set_forward_scale(self, scale: float):
-        self.forward_scale = float(scale)
 
     # -----------------------------------
     # Optional diagnostics helper
