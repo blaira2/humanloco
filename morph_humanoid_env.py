@@ -94,7 +94,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         # -----------------------------
         # Compute robust healthy_z_range
         # -----------------------------
-        min_healthy = 0.15 * self.base_height
+        min_healthy = 0.25 * self.base_height
         max_healthy = 2.0 * self.base_height
 
         self.custom_healthy_min = min_healthy
@@ -135,11 +135,11 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs, base_reward, terminated, truncated, info = super().step(action)
 
         #Reward weights
-        forward_weight = 5
-        com_alignment_weight = .1
-        com_progress_weight = .2
+        forward_weight = 2.7
+        com_alignment_weight = .4
+        com_progress_weight = 1
         energy_weight = .8
-        accel_weight = 0.005
+        accel_weight = 0.002
         lateral_weight = 0.03
         angular_weight = 0.05
 
@@ -158,9 +158,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._steps_alive += 1
         alive_reward = alive_step if not (terminated or truncated) else 0.0
         # terminal penalty shrinks over time
-        survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
-        max_penalty = 140.0
-        terminal_penalty = max_penalty * (1.0 - survival_frac)
+        terminal_penalty = 500
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
 
