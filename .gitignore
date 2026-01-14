@@ -7,3 +7,4 @@
 *.zip
 *.pkl
 *.csv
+/test_videos

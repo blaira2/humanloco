@@ -74,12 +74,12 @@ def preview(xml):
     env.close()
 
 
-def make_env(xml_file, morph_params, seed=0, max_episode_steps=1000):
+def make_env(xml_file, morph_params, seed=0, render_mode=None, max_episode_steps=1000):
     def _init():
         env = MorphHumanoidEnv(
             xml_file=xml_file,
             morph_params=morph_params,
-            render_mode=None        # IMPORTANT: no rendering in training
+            render_mode=render_mode      # IMPORTANT: no rendering in training
         )
         env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env.reset(seed=seed)
@@ -688,6 +688,50 @@ def collect_trajectories(
     np.savez_compressed(f"{variant_name}_traj.npz", **traj)
     print("Saved:", f"{variant_name}_traj.npz")
     env.close()
+
+def record_policy_video(model, variant_name, cfg, video_dir="videos", num_episodes=2, max_episode_steps=1000):
+    os.makedirs(video_dir, exist_ok=True)
+
+    xml_path = os.path.abspath(cfg["xml"])
+
+    def _make():
+        # IMPORTANT: your make_env must pass render_mode through to the underlying env
+        return make_env(xml_path, cfg, seed=0, max_episode_steps=max_episode_steps, render_mode="rgb_array")()
+
+    # Wrap the *single* env with RecordVideo before vectorizing
+    env0 = _make()
+    env0 = RecordVideo(
+        env0,
+        video_folder=video_dir,
+        name_prefix=variant_name,
+        episode_trigger=lambda ep: ep < num_episodes,  # record first N episodes
+        disable_logger=True,
+    )
+
+    base_env = DummyVecEnv([lambda: env0])
+
+    vecnorm_path = f"./norms/{variant_name}_vecnorm.pkl"
+    if os.path.exists(vecnorm_path):
+        env = VecNormalize.load(vecnorm_path, base_env)
+        env.training = False
+        env.norm_reward = False
+        print(f"[video] Loaded VecNormalize stats from {vecnorm_path}")
+    else:
+        env = base_env
+        print("[video] VecNormalize stats not found, using unnormalized env.")
+
+    obs = env.reset()
+    ep_count = 0
+    while ep_count < num_episodes:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, done, info = env.step(action)
+
+        # RecordVideo increments episodes on done; with VecEnv the done is in info
+        if done:
+            ep_count += 1
+
+    env.close()
+    print(f"Saved videos to: {video_dir}")
 
 
 class RewardDebugCallback(BaseCallback):
