@@ -176,9 +176,18 @@ class MorphHumanoidEnv(HumanoidEnv):
             terminal_penalty = 0.0
 
         # Forward reward
-        # reward grows with speed but saturates, and is posture-gated
-        x_vel_clipped = min(x_vel, 3.0)  # cap speed for reward purposes
-        forward_reward = forward_weight * x_vel_clipped
+        # reward is highest inside the target velocity band and down-weighted outside
+        target_min = 2.0
+        target_max = 3.0
+        x_vel_clipped = min(x_vel, target_max)
+        band_center = 0.5 * (target_min + target_max)
+        band_half_width = 0.5 * (target_max - target_min)
+        distance_from_band = max(0.0, abs(x_vel_clipped - band_center) - band_half_width)
+        band_scale = np.exp(-distance_from_band)
+        # condition forward reward on angular stability (pitch/roll)
+        angular_speed = np.linalg.norm(ang_vel[:2])
+        angular_scale = np.exp(-angular_weight * angular_speed)
+        forward_reward = forward_weight * x_vel_clipped * band_scale * angular_scale
 
         # energy penalty = discourage huge torques
         action = np.asarray(action)
@@ -233,9 +242,6 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         com_alignment_reward += com_progress_reward
 
-        # angular velocity penalty
-        angular_penalty = angular_weight * np.linalg.norm(ang_vel[:2])  # pitch/roll wobble
-
         # Combine
 
         reward = (
@@ -245,7 +251,6 @@ class MorphHumanoidEnv(HumanoidEnv):
             - terminal_penalty
             - lateral_penalty
             - accel_penalty
-            - angular_penalty
             - energy_penalty
         )
 
@@ -254,7 +259,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["lateral_penalty"] = float(lateral_penalty)
         info["accel_penalty"] = float(accel_penalty)
         info["com_reward"] = float(com_alignment_reward)
-        info["angular_penalty"] = float(angular_penalty)
+        info["angular_scale"] = float(angular_scale)
         info["alive_reward"] = float(alive_reward)
 
         return obs, reward, terminated, truncated, info
