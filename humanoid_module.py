@@ -743,6 +743,7 @@ class RewardDebugCallback(BaseCallback):
         super().__init__(verbose)
         self.ep_sums = None
         self.ep_len = None
+        self.ep_x_start = None
 
     def _on_training_start(self) -> None:
         n_envs = self.training_env.num_envs
@@ -759,8 +760,10 @@ class RewardDebugCallback(BaseCallback):
                 "velocity_penalty": 0.0,
                 "accel_penalty": 0.0,
                 "energy_penalty": 0.0,
-                "upright_reward": 0.0
+                "upright_reward": 0.0,
+                "x_progress": 0.0,
             })
+        self.ep_x_start = [None] * n_envs
 
     def _on_step(self) -> bool:
         rewards = self.locals["rewards"]  # shape (n_envs,)
@@ -784,12 +787,19 @@ class RewardDebugCallback(BaseCallback):
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
             s["upright_reward"] += info.get("upright_reward", 0.0)
 
+            x_pos = info.get("x_position")
+            if x_pos is not None:
+                if self.ep_x_start[i] is None:
+                    self.ep_x_start[i] = float(x_pos)
+                s["x_progress"] = float(x_pos) - self.ep_x_start[i]
+
             self.ep_len[i] += 1
 
             if dones[i]:
                 L = self.ep_len[i] or 1
                 print(
                     f"[env {i}] ep_len={L:4d} | "
+                    f"x_prog={s['x_progress']: .3f} | "
                     f"R_mean={s['total'] / L: .3f} | "
                     f"fwd={s['forward'] / L: .3f} | "
                     f"alive={s['alive'] / L: .3f} | "
@@ -805,6 +815,7 @@ class RewardDebugCallback(BaseCallback):
                 # reset for next episode
                 self.ep_sums[i] = {k: 0.0 for k in s}
                 self.ep_len[i] = 0
+                self.ep_x_start[i] = None
 
         return True
 
