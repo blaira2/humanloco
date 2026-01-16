@@ -1,4 +1,5 @@
 import numpy as np
+from gymnasium import spaces
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
 
 
@@ -32,6 +33,8 @@ class BalanceHumanoidEnv(HumanoidEnv):
         self.com_progress_weight = float(com_progress_weight)
         self._steps_alive = 0
         self._prev_com_distance = None
+        self._phase_step = 0
+        self.phase_cycle = 200
         self.morph = morph_params
 
         super().__init__(
@@ -41,16 +44,27 @@ class BalanceHumanoidEnv(HumanoidEnv):
             contact_cost_weight=0.0,
             **kwargs,
         )
+        base_space = self.observation_space
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(base_space.shape[0] + 1,),
+            dtype=base_space.dtype,
+        )
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
         self._steps_alive = 0
         self._prev_com_distance = None
+        self._phase_step = 0
         info["morph_params"] = self.morph
+        obs = self._get_obs()
         return obs, info
 
     def step(self, action):
         obs, base_reward, terminated, truncated, info = super().step(action)
+        self._phase_step += 1
+        obs = self._get_obs()
 
         alive_step = 1
         self._steps_alive += 1
@@ -131,3 +145,8 @@ class BalanceHumanoidEnv(HumanoidEnv):
         info["morph_params"] = self.morph
 
         return obs, reward, terminated, truncated, info
+
+    def _get_obs(self):
+        obs = super()._get_obs()
+        phase = (self._phase_step % self.phase_cycle) / self.phase_cycle
+        return np.concatenate([obs, np.array([phase], dtype=obs.dtype)])
