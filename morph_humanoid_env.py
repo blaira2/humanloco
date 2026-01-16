@@ -1,5 +1,6 @@
 import numpy as np
 import mujoco as mj
+from gymnasium import spaces
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
 import xml.etree.ElementTree as ET
 
@@ -104,12 +105,21 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._steps_alive = 0  # counts how many steps we stay alive
 
         self.prev_com_margin = 0
+        self._phase_step = 0
+        self.phase_cycle = 200
 
         super().__init__(
             xml_file=xml_file,
             forward_reward_weight=0.0,
             terminate_when_unhealthy=True,
             **kwargs,
+        )
+        base_space = self.observation_space
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(base_space.shape[0] + 1,),
+            dtype=base_space.dtype,
         )
 
         # cache some body parts
@@ -133,6 +143,8 @@ class MorphHumanoidEnv(HumanoidEnv):
     def step(self, action):
         # ---- call original HumanoidEnv step ----
         obs, base_reward, terminated, truncated, info = super().step(action)
+        self._phase_step += 1
+        obs = self._get_obs()
 
         #Reward weights
         forward_weight = 3
@@ -257,15 +269,21 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_action = None
         self._prev_qvel = None
         self._prev_com_distance = None
+        self._phase_step = 0
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
             delta = self.custom_healthy_min - torso_z + 0.05
             self.data.qpos[2] += delta
             mj.mj_forward(self.model, self.data)
-            obs = self._get_obs()
+        obs = self._get_obs()
 
         return obs, info
+
+    def _get_obs(self):
+        obs = super()._get_obs()
+        phase = (self._phase_step % self.phase_cycle) / self.phase_cycle
+        return np.concatenate([obs, np.array([phase], dtype=obs.dtype)])
 
     # -----------------------------------
     # CUSTOM HEALTH CHECK
