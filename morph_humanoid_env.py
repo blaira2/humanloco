@@ -267,6 +267,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["com_reward"] = float(com_alignment_reward)
         info["angular_scale"] = float(angular_scale)
         info["alive_reward"] = float(alive_reward)
+        info["x_position"] = float(self.data.qpos[0])
 
         return obs, reward, terminated, truncated, info
 
