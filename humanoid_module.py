@@ -797,7 +797,7 @@ class RewardDebugCallback(BaseCallback):
                     f"upright={s['upright_reward'] / L: .3f} | "
                     f"lat_p={s['velocity_penalty'] / L: .3f} | "
                     f"accel_p={s['accel_penalty'] / L: .3f} | "
-                    f"ang_p={s['angular_scale'] / L: .3f} | "
+                    f"ang_scale={s['angular_scale'] / L: .3f} | "
                     f"energy_p={s['energy_penalty'] / L: .3f}"
 
                 )

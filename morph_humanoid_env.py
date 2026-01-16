@@ -147,13 +147,13 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_weight = 3
+        forward_weight = 4
         com_alignment_weight = .4
         com_progress_weight = 1
         energy_weight = .8
-        accel_weight = 0.002
-        lateral_weight = 0.03
-        angular_weight = 0.04
+        accel_weight = 0.001
+        lateral_weight = 0.02
+        angular_weight = 0.1
         alive_weight = -.05
 
 
@@ -195,26 +195,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         n = len(action)
         energy_penalty = energy_weight * (energy / n)
 
-
-        # -----------------
-        # Minor Penalties
-        # -----------------
-        # acceleration penalty (penalize every direction but forward)
-        accel_penalty = 0.0
-        if self._prev_qvel is not None:
-            dt = self.model.opt.timestep
-            accel = (self.data.qvel[:3] - self._prev_qvel[:3]) / dt
-            forward_axis = np.array([1.0, 0.0, 0.0])
-            forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
-            non_forward_accel = accel - forward_accel * forward_axis
-            accel_penalty = accel_weight * np.linalg.norm(non_forward_accel)
-        self._prev_qvel = self.data.qvel.copy()
-
-        # sideways = discourage strafing
-        lateral_penalty = lateral_weight * abs(y_vel)
-
         # COM reward
-
         torso_body_id = self.model.body("torso").id
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
@@ -241,6 +222,25 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_com_distance = com_distance
 
         com_alignment_reward += com_progress_reward
+
+        # -----------------
+        # Minor Penalties
+        # -----------------
+        # acceleration penalty (penalize every direction but forward)
+        accel_penalty = 0.0
+        if self._prev_qvel is not None:
+            dt = self.model.opt.timestep
+            accel = (self.data.qvel[:3] - self._prev_qvel[:3]) / dt
+            forward_axis = np.array([1.0, 0.0, 0.0])
+            forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
+            non_forward_accel = accel - forward_accel * forward_axis
+            accel_penalty = accel_weight * np.linalg.norm(non_forward_accel)
+        self._prev_qvel = self.data.qvel.copy()
+
+        # sideways = discourage strafing
+        lateral_penalty = lateral_weight * abs(y_vel)
+
+
 
         # Combine
 
