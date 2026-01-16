@@ -196,20 +196,26 @@ class MorphHumanoidEnv(HumanoidEnv):
         energy_penalty = energy_weight * (energy / n)
 
         # COM reward
+        forward_scale = 1
+        lateral_scale = .6
+        forward_bias = .05
         torso_body_id = self.model.body("torso").id
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
         torso_xy = self.data.xipos[torso_body_id][:2]
         lf_xy = self.data.xipos[left_foot_id][:2]
         rf_xy = self.data.xipos[right_foot_id][:2]
-        x_limits = (min(lf_xy[0], rf_xy[0]), max(lf_xy[0], rf_xy[0]))
+        x_limits = (min(lf_xy[0], rf_xy[0])+forward_bias, max(lf_xy[0], rf_xy[0])+forward_bias)
         y_limits = (min(lf_xy[1], rf_xy[1]), max(lf_xy[1], rf_xy[1]))
         support_center = np.array(
             [(x_limits[0] + x_limits[1]) / 2.0, (y_limits[0] + y_limits[1]) / 2.0],
             dtype=float,
         )
         com_xy = self.data.subtree_com[0][:2]
-        com_distance = float(np.linalg.norm(com_xy - support_center))
+        dx = com_xy[0] - support_center[0]
+        dy = com_xy[1] - support_center[1]
+        weighted_distance = np.sqrt((dx / forward_scale) ** 2 + (dy / lateral_scale) ** 2)
+
         dx_outside = max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1])
         dy_outside = max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1])
         com_outside_distance = float(np.hypot(dx_outside, dy_outside))
@@ -218,8 +224,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         if self._prev_com_distance is None:
             com_progress_reward = 0.0
         else:
-            com_progress_reward = (com_progress_weight * (self._prev_com_distance - com_distance))
-        self._prev_com_distance = com_distance
+            com_progress_reward = (com_progress_weight * (self._prev_com_distance - weighted_distance))
+        self._prev_com_distance = weighted_distance
 
         com_alignment_reward += com_progress_reward
 
