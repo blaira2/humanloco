@@ -93,6 +93,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_action = None
         self._prev_qvel = None
         self._prev_vertical_potential = None
+        self._prev_angular_potential = None
         # -----------------------------
         # Compute robust healthy_z_range
         # -----------------------------
@@ -110,6 +111,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.phase_cycle = 200
         self.vertical_velocity_shaping_weight = 0.2
         self.vertical_velocity_shaping_gamma = 0.99
+        self.angular_velocity_shaping_weight = 0.1
+        self.angular_velocity_shaping_gamma = 0.99
 
         super().__init__(
             xml_file=xml_file,
@@ -160,6 +163,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         max_alive = .5
 
 
+
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
         y_vel = float(self.data.qvel[1])  # lateral speed
@@ -189,8 +193,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         band_scale = np.exp(-distance_from_band)
         # condition forward reward on angular stability (pitch/roll)
         angular_speed = np.linalg.norm(ang_vel[:2])
-        angular_scale = np.exp(-angular_weight * angular_speed)
-        forward_reward = forward_weight * x_vel_clipped * band_scale * angular_scale
+        forward_reward = forward_weight * x_vel_clipped * band_scale
 
         # energy penalty = discourage huge torques
         action = np.asarray(action)
@@ -242,6 +245,16 @@ class MorphHumanoidEnv(HumanoidEnv):
             )
         self._prev_vertical_potential = vertical_potential
 
+        # Potential-based shaping on angular velocity
+        angular_potential = -angular_speed
+        if self._prev_angular_potential is None:
+            angular_velocity_shaping = 0.0
+        else:
+            angular_velocity_shaping = self.angular_velocity_shaping_weight * (
+                self.angular_velocity_shaping_gamma * angular_potential - self._prev_angular_potential
+            )
+        self._prev_angular_potential = angular_potential
+
         # -----------------
         # Minor Penalties
         # -----------------
@@ -268,6 +281,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             + forward_reward
             + com_alignment_reward
             + vertical_velocity_shaping
+            + angular_velocity_shaping
             - terminal_penalty
             - lateral_penalty
             - accel_penalty
@@ -280,7 +294,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["accel_penalty"] = float(accel_penalty)
         info["com_reward"] = float(com_alignment_reward)
         info["vertical_velocity_shaping"] = float(vertical_velocity_shaping)
-        info["angular_scale"] = float(angular_scale)
+        info["angular_velocity_shaping"] = float(angular_velocity_shaping)
+        info["angular_speed"] = float(angular_speed)
         info["alive_reward"] = float(alive_reward)
         info["x_position"] = float(self.data.qpos[0])
 
@@ -297,6 +312,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_qvel = None
         self._prev_com_distance = None
         self._prev_vertical_potential = None
+        self._prev_angular_potential = None
         self._phase_step = 0
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
