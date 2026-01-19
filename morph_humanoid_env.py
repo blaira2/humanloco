@@ -92,6 +92,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         # Store for debugging
         self._prev_action = None
         self._prev_qvel = None
+        self._prev_vertical_potential = None
         # -----------------------------
         # Compute robust healthy_z_range
         # -----------------------------
@@ -107,6 +108,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.prev_com_margin = 0
         self._phase_step = 0
         self.phase_cycle = 200
+        self.vertical_velocity_shaping_weight = 0.2
+        self.vertical_velocity_shaping_gamma = 0.99
 
         super().__init__(
             xml_file=xml_file,
@@ -229,6 +232,16 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         com_alignment_reward += com_progress_reward
 
+        # Potential-based shaping on vertical velocity
+        vertical_potential = -abs(z_vel)
+        if self._prev_vertical_potential is None:
+            vertical_velocity_shaping = 0.0
+        else:
+            vertical_velocity_shaping = self.vertical_velocity_shaping_weight * (
+                self.vertical_velocity_shaping_gamma * vertical_potential - self._prev_vertical_potential
+            )
+        self._prev_vertical_potential = vertical_potential
+
         # -----------------
         # Minor Penalties
         # -----------------
@@ -254,6 +267,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             alive_reward
             + forward_reward
             + com_alignment_reward
+            + vertical_velocity_shaping
             - terminal_penalty
             - lateral_penalty
             - accel_penalty
@@ -265,6 +279,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["lateral_penalty"] = float(lateral_penalty)
         info["accel_penalty"] = float(accel_penalty)
         info["com_reward"] = float(com_alignment_reward)
+        info["vertical_velocity_shaping"] = float(vertical_velocity_shaping)
         info["angular_scale"] = float(angular_scale)
         info["alive_reward"] = float(alive_reward)
         info["x_position"] = float(self.data.qpos[0])
@@ -281,6 +296,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_action = None
         self._prev_qvel = None
         self._prev_com_distance = None
+        self._prev_vertical_potential = None
         self._phase_step = 0
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
