@@ -109,9 +109,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.prev_com_margin = 0
         self._phase_step = 0
         self.phase_cycle = 200
-        self.vertical_velocity_shaping_weight = 0.2
+        self.vertical_velocity_shaping_weight = 0.5
         self.vertical_velocity_shaping_gamma = 0.99
-        self.angular_velocity_shaping_weight = 0.1
+        self.angular_velocity_shaping_weight = 0.5
         self.angular_velocity_shaping_gamma = 0.99
 
         super().__init__(
@@ -158,11 +158,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         com_progress_weight = 1
         energy_weight = .8
         accel_weight = 0.001
-        lateral_weight = 0.02
-        angular_weight = 0.1
         max_alive = .5
-
-
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -170,7 +166,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         z_vel = float(self.data.qvel[2])  # downward speed
         x_vel = max(x_vel, 0.0)  # no reward for walking backwards
         ang_vel = self.data.qvel[3:6]  # angular vel
-
 
         # Alive reward
         # small constant per timestep + big penalty on fall
@@ -235,6 +230,10 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         com_alignment_reward += com_progress_reward
 
+        # -----------------
+        # Potential based shaping
+        # -----------------
+
         # Potential-based shaping on vertical velocity
         vertical_potential = -abs(z_vel)
         if self._prev_vertical_potential is None:
@@ -255,9 +254,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             )
         self._prev_angular_potential = angular_potential
 
-        # -----------------
-        # Minor Penalties
-        # -----------------
+
         # acceleration penalty (penalize every direction but forward)
         accel_penalty = 0.0
         if self._prev_qvel is not None:
@@ -268,9 +265,6 @@ class MorphHumanoidEnv(HumanoidEnv):
             non_forward_accel = accel - forward_accel * forward_axis
             accel_penalty = accel_weight * np.linalg.norm(non_forward_accel)
         self._prev_qvel = self.data.qvel.copy()
-
-        # sideways = discourage strafing
-        lateral_penalty = lateral_weight * abs(y_vel)
 
 
 
@@ -283,14 +277,12 @@ class MorphHumanoidEnv(HumanoidEnv):
             + vertical_velocity_shaping
             + angular_velocity_shaping
             - terminal_penalty
-            - lateral_penalty
             - accel_penalty
             - energy_penalty
         )
 
         info["energy_penalty"] = float(energy_penalty)
         info["forward_reward"] = float(forward_reward)
-        info["lateral_penalty"] = float(lateral_penalty)
         info["accel_penalty"] = float(accel_penalty)
         info["com_reward"] = float(com_alignment_reward)
         info["vertical_velocity_shaping"] = float(vertical_velocity_shaping)
