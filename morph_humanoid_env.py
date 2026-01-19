@@ -157,7 +157,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         accel_weight = 0.001
         lateral_weight = 0.02
         angular_weight = 0.1
-        max_alive = 1
+        max_alive = .5
 
 
         # Base kinematics
