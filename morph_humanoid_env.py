@@ -147,14 +147,14 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_weight = 4
+        forward_weight = 4.8
         com_alignment_weight = .4
         com_progress_weight = 1
         energy_weight = .8
         accel_weight = 0.001
         lateral_weight = 0.02
         angular_weight = 0.1
-        alive_weight = -.05
+        max_alive = 1
 
 
         # Base kinematics
@@ -167,9 +167,9 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         # Alive reward
         # small constant per timestep + big penalty on fall
-
+        k = 0.01
         self._steps_alive += 1
-        alive_reward = alive_weight if not (terminated or truncated) else 0.0
+        alive_reward =  max_alive * (1 - np.exp(-k * self._steps_alive)) if not (terminated or truncated) else 0.0
         # terminal penalty shrinks over time
         terminal_penalty = 200
         if not terminated:  # only if it actually fell, not time-limit
@@ -177,7 +177,7 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         # Forward reward
         # reward is highest inside the target velocity band and down-weighted outside
-        target_min = 2.0
+        target_min = 1.0
         target_max = 3.0
         x_vel_clipped = min(x_vel, target_max)
         band_center = 0.5 * (target_min + target_max)
