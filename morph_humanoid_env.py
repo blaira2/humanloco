@@ -94,6 +94,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_qvel = None
         self._prev_vertical_potential = None
         self._prev_angular_potential = None
+        self._prev_x_position = None
+
         # -----------------------------
         # Compute robust healthy_z_range
         # -----------------------------
@@ -186,9 +188,16 @@ class MorphHumanoidEnv(HumanoidEnv):
         band_half_width = 0.5 * (target_max - target_min)
         distance_from_band = max(0.0, abs(x_vel_clipped - band_center) - band_half_width)
         band_scale = np.exp(-distance_from_band)
-        # condition forward reward on angular stability (pitch/roll)
-        angular_speed = np.linalg.norm(ang_vel[:2])
-        forward_reward = forward_weight * x_vel_clipped * band_scale
+
+        # condition forward reward on stable velocity
+        x_position = self.data.subtree_com[0][0]
+        if self._prev_x_position is None:
+            x_progress = 0.0
+        else:
+            x_progress = max(0.0,(x_position - self._prev_x_position))
+        self._prev_x_position = x_position
+
+        forward_reward = forward_weight * x_progress * band_scale
 
         # energy penalty = discourage huge torques
         action = np.asarray(action)
@@ -245,6 +254,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_vertical_potential = vertical_potential
 
         # Potential-based shaping on angular velocity
+        angular_speed = np.linalg.norm(ang_vel[:2])
         angular_potential = -angular_speed
         if self._prev_angular_potential is None:
             angular_velocity_shaping = 0.0
