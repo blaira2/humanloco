@@ -101,11 +101,16 @@ class BalanceHumanoidEnv(HumanoidEnv):
         torso_body_id = self.model.body("torso").id
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
+        left_hand_geom_id = self.model.geom("left_hand").id
+        right_hand_geom_id = self.model.geom("right_hand").id
         torso_xy = self.data.xipos[torso_body_id][:2]
         lf_xy = self.data.xipos[left_foot_id][:2]
         rf_xy = self.data.xipos[right_foot_id][:2]
-        x_limits = (min(lf_xy[0], rf_xy[0]), max(lf_xy[0], rf_xy[0]))
-        y_limits = (min(lf_xy[1], rf_xy[1]), max(lf_xy[1], rf_xy[1]))
+        lh_xy = self.data.geom_xpos[left_hand_geom_id][:2]
+        rh_xy = self.data.geom_xpos[right_hand_geom_id][:2]
+        support_points = np.array([lf_xy, rf_xy, lh_xy, rh_xy], dtype=float)
+        x_limits = (float(support_points[:, 0].min()), float(support_points[:, 0].max()))
+        y_limits = (float(support_points[:, 1].min()), float(support_points[:, 1].max()))
         support_center = np.array(
             [(x_limits[0] + x_limits[1]) / 2.0, (y_limits[0] + y_limits[1]) / 2.0],
             dtype=float,
