@@ -171,9 +171,9 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         # Alive reward
         # small constant per timestep + big penalty on fall
-        k = 0.01
+
         self._steps_alive += 1
-        alive_reward =  max_alive * (1 - np.exp(-k * self._steps_alive)) if not (terminated or truncated) else 0.0
+        alive_reward =  max_alive if not (terminated or truncated) else 0.0
         # terminal penalty shrinks over time
         terminal_penalty = 200
         if not terminated:  # only if it actually fell, not time-limit
@@ -197,7 +197,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             x_progress = max(0.0,(x_position - self._prev_x_position))
         self._prev_x_position = x_position
 
-        forward_reward = forward_weight * x_progress * band_scale
+        forward_reward = forward_weight * (x_vel_clipped * band_scale) + x_progress
 
         # energy penalty = discourage huge torques
         action = np.asarray(action)
