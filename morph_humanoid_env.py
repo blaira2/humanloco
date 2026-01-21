@@ -81,6 +81,7 @@ class MorphHumanoidEnv(HumanoidEnv):
 
     def __init__(self, xml_file, morph_params, **kwargs):
         self.morph = morph_params
+        self.collision_penalty_weight = float(kwargs.pop("collision_penalty_weight", 1.0))
 
         xml_base_height = calculate_base_height_from_xml(xml_file)
         self.base_height = xml_base_height if xml_base_height is not None else 1
@@ -147,6 +148,13 @@ class MorphHumanoidEnv(HumanoidEnv):
         # -----------------------------
         self.max_tilt = np.deg2rad(90)  # if torso tilts below horizontal, consider fallen
         self.min_base_height = 0.03  # if the pelvis hits the floor → terminal
+        self._ground_geom_id = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "floor")
+        self._allowed_contact_geom_ids = {
+            mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "left_foot"),
+            mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "right_foot"),
+            mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "left_hand"),
+            mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "right_hand"),
+        }
 
     def step(self, action):
         # ---- call original HumanoidEnv step ----
@@ -204,6 +212,21 @@ class MorphHumanoidEnv(HumanoidEnv):
         energy = np.sum(action**2)
         n = len(action)
         energy_penalty = energy_weight * (energy / n)
+        contact_penalty = 0.0
+        if self.collision_penalty_weight:
+            contact_geoms = set()
+            for i in range(self.data.ncon):
+                contact = self.data.contact[i]
+                if contact.geom1 == self._ground_geom_id:
+                    other = contact.geom2
+                elif contact.geom2 == self._ground_geom_id:
+                    other = contact.geom1
+                else:
+                    continue
+                if other in self._allowed_contact_geom_ids:
+                    continue
+                contact_geoms.add(other)
+            contact_penalty = self.collision_penalty_weight * len(contact_geoms)
 
         # COM reward
         forward_scale = 1
@@ -297,6 +320,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             - terminal_penalty
             - accel_penalty
             - energy_penalty
+            - contact_penalty
         )
 
         info["energy_penalty"] = float(energy_penalty)
@@ -308,6 +332,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["angular_speed"] = float(angular_speed)
         info["alive_reward"] = float(alive_reward)
         info["x_position"] = float(self.data.qpos[0])
+        info["collision_penalty"] = float(contact_penalty)
 
         return obs, reward, terminated, truncated, info
 
