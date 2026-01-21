@@ -81,8 +81,6 @@ class MorphHumanoidEnv(HumanoidEnv):
 
     def __init__(self, xml_file, morph_params, **kwargs):
         self.morph = morph_params
-        self.collision_penalty_weight = float(kwargs.pop("collision_penalty_weight", 1.0))
-
         xml_base_height = calculate_base_height_from_xml(xml_file)
         self.base_height = xml_base_height if xml_base_height is not None else 1
         print(f"calculated base height: {self.base_height} ")
@@ -168,6 +166,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         com_progress_weight = 1
         energy_weight = .8
         accel_weight = 0.001
+        collision_weight = 1
         max_alive = .1
 
         # Base kinematics
@@ -212,21 +211,22 @@ class MorphHumanoidEnv(HumanoidEnv):
         energy = np.sum(action**2)
         n = len(action)
         energy_penalty = energy_weight * (energy / n)
+
+        # contact penalty
         contact_penalty = 0.0
-        if self.collision_penalty_weight:
-            contact_geoms = set()
-            for i in range(self.data.ncon):
-                contact = self.data.contact[i]
-                if contact.geom1 == self._ground_geom_id:
-                    other = contact.geom2
-                elif contact.geom2 == self._ground_geom_id:
-                    other = contact.geom1
-                else:
-                    continue
-                if other in self._allowed_contact_geom_ids:
-                    continue
-                contact_geoms.add(other)
-            contact_penalty = self.collision_penalty_weight * len(contact_geoms)
+        contact_geoms = set()
+        for i in range(self.data.ncon):
+            contact = self.data.contact[i]
+            if contact.geom1 == self._ground_geom_id:
+                other = contact.geom2
+            elif contact.geom2 == self._ground_geom_id:
+                other = contact.geom1
+            else:
+                continue
+            if other in self._allowed_contact_geom_ids:
+                continue
+            contact_geoms.add(other)
+            contact_penalty = collision_weight * len(contact_geoms)
 
         # COM reward
         forward_scale = 1

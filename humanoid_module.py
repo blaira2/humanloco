@@ -756,12 +756,13 @@ class RewardDebugCallback(BaseCallback):
                 "alive": 0.0,
                 "lateral_penalty": 0.0,
                 "com_reward": 0.0,
+                "upright_reward": 0.0,
                 "velocity_penalty": 0.0,
                 "vertical_velocity_shaping": 0.0,
                 "angular_velocity_shaping": 0.0,
                 "accel_penalty": 0.0,
                 "energy_penalty": 0.0,
-                "upright_reward": 0.0,
+                "collision_penalty": 0.0,
                 "x_progress": 0.0,
             })
         self.ep_x_start = [None] * n_envs
@@ -782,12 +783,14 @@ class RewardDebugCallback(BaseCallback):
             s["alive"] += info.get("alive_reward", 0.0)
             s["lateral_penalty"] += info.get("lateral_penalty", 0.0)
             s["com_reward"] += info.get("com_reward", 0.0)
+            s["upright_reward"] += info.get("upright_reward", 0.0)
             s["accel_penalty"] += info.get("accel_penalty", 0.0)
             s["velocity_penalty"] += info.get("velocity_penalty", 0.0)
             s["vertical_velocity_shaping"] += info.get("vertical_velocity_shaping", 0.0)
             s["angular_velocity_shaping"] += info.get("angular_velocity_shaping", 0.0)
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
-            s["upright_reward"] += info.get("upright_reward", 0.0)
+            s["collision_penalty"] += info.get("collision_penalty", 0.0)
+
 
             x_pos = info.get("x_position")
             if x_pos is not None:
@@ -811,7 +814,8 @@ class RewardDebugCallback(BaseCallback):
                     f"upright={s['upright_reward'] / L: .3f} | "
                     f"lat_p={s['velocity_penalty'] / L: .3f} | "
                     f"accel_p={s['accel_penalty'] / L: .3f} | "
-                    f"energy_p={s['energy_penalty'] / L: .3f}"
+                    f"energy_p={s['energy_penalty'] / L: .3f} |"
+                    f"contact_p={s['collision_penalty'] / L: .3f} |"
 
                 )
 
