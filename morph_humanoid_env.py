@@ -155,12 +155,12 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_weight = 4.8
-        com_alignment_weight = .4
+        forward_weight = 4
+        com_alignment_weight = .6
         com_progress_weight = 1
         energy_weight = .8
         accel_weight = 0.001
-        max_alive = .5
+        max_alive = .1
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -208,7 +208,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         # COM reward
         forward_scale = 1
         lateral_scale = .6
-        forward_bias = .05
+        forward_bias = .02
         torso_body_id = self.model.body("torso").id
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
