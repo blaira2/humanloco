@@ -163,11 +163,11 @@ class MorphHumanoidEnv(HumanoidEnv):
         #Reward weights
         forward_weight = 4
         com_alignment_weight = .6
-        com_progress_weight = 1
+        com_progress_weight = .6
         energy_weight = .8
         accel_weight = 0.001
-        collision_weight = 1
-        max_alive = .1
+        collision_weight = .1
+        max_alive = .05
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -182,7 +182,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._steps_alive += 1
         alive_reward =  max_alive if not (terminated or truncated) else 0.0
         # terminal penalty shrinks over time
-        terminal_penalty = 200
+        terminal_penalty = 500
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
 
