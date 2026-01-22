@@ -214,7 +214,6 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         # contact penalty
         contact_penalty = 0.0
-        contact_geoms = set()
         for i in range(self.data.ncon):
             contact = self.data.contact[i]
             if contact.geom1 == self._ground_geom_id:
@@ -225,8 +224,10 @@ class MorphHumanoidEnv(HumanoidEnv):
                 continue
             if other in self._allowed_contact_geom_ids:
                 continue
-            contact_geoms.add(other)
-            contact_penalty = collision_weight * len(contact_geoms)
+            contact_force = np.zeros(6, dtype=float)
+            mj.mj_contactForce(self.model, self.data, i, contact_force)
+            normal_force = abs(contact_force[0])
+            contact_penalty += collision_weight * normal_force
 
         # COM reward
         forward_scale = 1
