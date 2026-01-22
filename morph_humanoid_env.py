@@ -231,7 +231,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         # COM reward
         forward_scale = 1
         lateral_scale = .6
-        forward_bias = .02
+        forward_bias = .03
         torso_body_id = self.model.body("torso").id
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
