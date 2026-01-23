@@ -161,13 +161,13 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_weight = 4
-        com_alignment_weight = .6
-        com_progress_weight = .6
+        forward_weight = 4.2
+        com_alignment_weight = .5
+        com_progress_weight = .5
         energy_weight = .8
         accel_weight = 0.001
         collision_weight = .1
-        max_alive = .05
+        max_alive = -.25
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -188,8 +188,8 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         # Forward reward
         # reward is highest inside the target velocity band and down-weighted outside
-        target_min = 1.0
-        target_max = 3.0
+        target_min = .1
+        target_max = 1
         x_vel_clipped = min(x_vel, target_max)
         band_center = 0.5 * (target_min + target_max)
         band_half_width = 0.5 * (target_max - target_min)
