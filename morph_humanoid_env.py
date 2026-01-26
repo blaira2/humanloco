@@ -161,13 +161,13 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_weight = 4.2
+        forward_weight = 7
         com_alignment_weight = .5
         com_progress_weight = .5
         energy_weight = .8
         accel_weight = 0.001
         collision_weight = .1
-        max_alive = -.25
+        max_alive = -.5
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
