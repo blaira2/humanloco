@@ -1,5 +1,6 @@
 import numpy as np
 import mujoco as mj
+from collections import deque
 from gymnasium import spaces
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
 import xml.etree.ElementTree as ET
@@ -114,6 +115,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.vertical_velocity_shaping_gamma = 0.99
         self.angular_velocity_shaping_weight = 0.5
         self.angular_velocity_shaping_gamma = 0.99
+        self._x_vel_history = deque(maxlen=5)
 
         super().__init__(
             xml_file=xml_file,
@@ -167,6 +169,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         energy_weight = .8
         accel_weight = 0.001
         collision_weight = .1
+        velocity_stability_weight = 0.3
+        velocity_stability_deadzone = 0.05
         max_alive = -.5
 
         # Base kinematics
@@ -175,6 +179,13 @@ class MorphHumanoidEnv(HumanoidEnv):
         z_vel = float(self.data.qvel[2])  # downward speed
         x_vel = max(x_vel, 0.0)  # no reward for walking backwards
         ang_vel = self.data.qvel[3:6]  # angular vel
+
+        self._x_vel_history.append(x_vel)
+        avg_x_vel = float(np.mean(self._x_vel_history))
+        velocity_delta = abs(x_vel - avg_x_vel)
+        velocity_stability_penalty = velocity_stability_weight * max(
+            0.0, velocity_delta - velocity_stability_deadzone
+        )
 
         # Alive reward
         # small constant per timestep + big penalty on fall
@@ -322,6 +333,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             - accel_penalty
             - energy_penalty
             - contact_penalty
+            - velocity_stability_penalty
         )
 
         info["energy_penalty"] = float(energy_penalty)
@@ -334,6 +346,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["alive_reward"] = float(alive_reward)
         info["x_position"] = float(self.data.qpos[0])
         info["collision_penalty"] = float(contact_penalty)
+        info["velocity_stability_penalty"] = float(velocity_stability_penalty)
 
         return obs, reward, terminated, truncated, info
 
@@ -350,6 +363,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_vertical_potential = None
         self._prev_angular_potential = None
         self._phase_step = 0
+        self._x_vel_history.clear()
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
