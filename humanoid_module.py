@@ -760,7 +760,7 @@ class RewardDebugCallback(BaseCallback):
                 "velocity_penalty": 0.0,
                 "vertical_velocity_shaping": 0.0,
                 "angular_velocity_shaping": 0.0,
-                "accel_penalty": 0.0,
+                "velocity_stability_penalty": 0.0,
                 "energy_penalty": 0.0,
                 "collision_penalty": 0.0,
                 "x_progress": 0.0,
@@ -784,7 +784,7 @@ class RewardDebugCallback(BaseCallback):
             s["lateral_penalty"] += info.get("lateral_penalty", 0.0)
             s["com_reward"] += info.get("com_reward", 0.0)
             s["upright_reward"] += info.get("upright_reward", 0.0)
-            s["accel_penalty"] += info.get("accel_penalty", 0.0)
+            s["velocity_stability_penalty"] += info.get("velocity_stability_penalty", 0.0)
             s["velocity_penalty"] += info.get("velocity_penalty", 0.0)
             s["vertical_velocity_shaping"] += info.get("vertical_velocity_shaping", 0.0)
             s["angular_velocity_shaping"] += info.get("angular_velocity_shaping", 0.0)
@@ -813,7 +813,7 @@ class RewardDebugCallback(BaseCallback):
                     f"com={s['com_reward'] / L: .3f} | "
                     f"upright={s['upright_reward'] / L: .3f} | "
                     f"lat_p={s['velocity_penalty'] / L: .3f} | "
-                    f"accel_p={s['accel_penalty'] / L: .3f} | "
+                    f"vel_stab_p={s['velocity_stability_penalty'] / L: .3f} | "
                     f"energy_p={s['energy_penalty'] / L: .3f} |"
                     f"contact_p={s['collision_penalty'] / L: .3f} |"
 

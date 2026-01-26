@@ -167,9 +167,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         com_alignment_weight = .5
         com_progress_weight = .5
         energy_weight = .8
-        accel_weight = 0.001
         collision_weight = .1
-        velocity_stability_weight = 0.3
+        velocity_stability_weight = 2
         velocity_stability_deadzone = 0.05
         max_alive = -.5
 
@@ -180,16 +179,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         x_vel = max(x_vel, 0.0)  # no reward for walking backwards
         ang_vel = self.data.qvel[3:6]  # angular vel
 
-        self._x_vel_history.append(x_vel)
-        avg_x_vel = float(np.mean(self._x_vel_history))
-        velocity_delta = abs(x_vel - avg_x_vel)
-        velocity_stability_penalty = velocity_stability_weight * max(
-            0.0, velocity_delta - velocity_stability_deadzone
-        )
 
         # Alive reward
         # small constant per timestep + big penalty on fall
-
         self._steps_alive += 1
         alive_reward =  max_alive if not (terminated or truncated) else 0.0
         # terminal penalty shrinks over time
@@ -216,6 +208,14 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_x_position = x_position
 
         forward_reward = forward_weight * (x_vel_clipped * band_scale) + x_progress
+
+        #Velocity history stability
+        self._x_vel_history.append(x_vel)
+        avg_x_vel = float(np.mean(self._x_vel_history))
+        velocity_delta = abs(x_vel - avg_x_vel)
+        velocity_stability_penalty = velocity_stability_weight * max(
+            0.0, velocity_delta - velocity_stability_deadzone
+        )
 
         # energy penalty = discourage huge torques
         action = np.asarray(action)
@@ -308,17 +308,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_angular_potential = angular_potential
 
 
-        # acceleration penalty (penalize every direction but forward)
-        accel_penalty = 0.0
-        if self._prev_qvel is not None:
-            dt = self.model.opt.timestep
-            accel = (self.data.qvel[:3] - self._prev_qvel[:3]) / dt
-            forward_axis = np.array([1.0, 0.0, 0.0])
-            forward_accel = max(0.0, float(np.dot(accel, forward_axis)))
-            non_forward_accel = accel - forward_accel * forward_axis
-            accel_penalty = accel_weight * np.linalg.norm(non_forward_accel)
-        self._prev_qvel = self.data.qvel.copy()
-
 
 
         # Combine
@@ -330,7 +319,6 @@ class MorphHumanoidEnv(HumanoidEnv):
             + vertical_velocity_shaping
             + angular_velocity_shaping
             - terminal_penalty
-            - accel_penalty
             - energy_penalty
             - contact_penalty
             - velocity_stability_penalty
@@ -338,7 +326,6 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         info["energy_penalty"] = float(energy_penalty)
         info["forward_reward"] = float(forward_reward)
-        info["accel_penalty"] = float(accel_penalty)
         info["com_reward"] = float(com_alignment_reward)
         info["vertical_velocity_shaping"] = float(vertical_velocity_shaping)
         info["angular_velocity_shaping"] = float(angular_velocity_shaping)
