@@ -94,7 +94,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_qvel = None
         self._prev_vertical_potential = None
         self._prev_angular_potential = None
-        self._prev_x_position = None
+        self._prev_com_position = None
 
         # -----------------------------
         # Compute robust healthy_z_range
@@ -115,7 +115,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.vertical_velocity_shaping_gamma = 0.99
         self.angular_velocity_shaping_weight = 0.5
         self.angular_velocity_shaping_gamma = 0.99
-        self._x_vel_history = deque(maxlen=5)
+        self._com_x_vel_history = deque(maxlen=5)
+        self._com_y_vel_history = deque(maxlen=5)
+        self._com_z_vel_history = deque(maxlen=5)
 
         super().__init__(
             xml_file=xml_file,
@@ -163,7 +165,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_weight = 7
+        forward_reward_amount = 7
         com_alignment_weight = .5
         com_progress_weight = .5
         energy_weight = .8
@@ -176,7 +178,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         x_vel = float(self.data.qvel[0])  # forward speed
         y_vel = float(self.data.qvel[1])  # lateral speed
         z_vel = float(self.data.qvel[2])  # downward speed
-        x_vel = max(x_vel, 0.0)  # no reward for walking backwards
         ang_vel = self.data.qvel[3:6]  # angular vel
 
 
@@ -190,29 +191,30 @@ class MorphHumanoidEnv(HumanoidEnv):
             terminal_penalty = 0.0
 
         # Forward reward
-        # reward is highest inside the target velocity band and down-weighted outside
-        target_min = .1
-        target_max = 1
-        x_vel_clipped = min(x_vel, target_max)
-        band_center = 0.5 * (target_min + target_max)
-        band_half_width = 0.5 * (target_max - target_min)
-        distance_from_band = max(0.0, abs(x_vel_clipped - band_center) - band_half_width)
-        band_scale = np.exp(-distance_from_band)
-
-        # condition forward reward on stable velocity
-        x_position = self.data.subtree_com[0][0]
-        if self._prev_x_position is None:
-            x_progress = 0.0
+        # set reward per step when forward COM velocity dominates and exceeds minimum
+        com_position = np.array(self.data.subtree_com[0], dtype=float)
+        if self._prev_com_position is None:
+            com_velocity = np.zeros(3, dtype=float)
         else:
-            x_progress = max(0.0,(x_position - self._prev_x_position))
-        self._prev_x_position = x_position
+            com_velocity = (com_position - self._prev_com_position) / self.dt
+        self._prev_com_position = com_position
 
-        forward_reward = forward_weight * (x_vel_clipped * band_scale) + x_progress
+        forward_speed = max(0.0, float(com_velocity[0]))
+        self._com_x_vel_history.append(forward_speed)
+        self._com_y_vel_history.append(abs(float(com_velocity[1])))
+        self._com_z_vel_history.append(abs(float(com_velocity[2])))
+
+        avg_forward_speed = float(np.mean(self._com_x_vel_history))
+        avg_lateral_speed = float(np.mean(self._com_y_vel_history))
+        avg_vertical_speed = float(np.mean(self._com_z_vel_history))
+        max_other_speed = max(avg_lateral_speed, avg_vertical_speed)
+
+        min_forward_speed = 0.1
+        meets_forward_criteria = avg_forward_speed > min_forward_speed and avg_forward_speed > 2.0 * max_other_speed
+        forward_reward = forward_reward_amount if meets_forward_criteria else 0.0
 
         #Velocity history stability
-        self._x_vel_history.append(x_vel)
-        avg_x_vel = float(np.mean(self._x_vel_history))
-        velocity_delta = abs(x_vel - avg_x_vel)
+        velocity_delta = abs(x_vel - avg_forward_speed)
         velocity_stability_penalty = velocity_stability_weight * max(
             0.0, velocity_delta - velocity_stability_deadzone
         )
@@ -334,6 +336,10 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["x_position"] = float(self.data.qpos[0])
         info["collision_penalty"] = float(contact_penalty)
         info["velocity_stability_penalty"] = float(velocity_stability_penalty)
+        info["avg_forward_com_speed"] = float(avg_forward_speed)
+        info["avg_lateral_com_speed"] = float(avg_lateral_speed)
+        info["avg_vertical_com_speed"] = float(avg_vertical_speed)
+        info["meets_forward_criteria"] = bool(meets_forward_criteria)
 
         return obs, reward, terminated, truncated, info
 
@@ -350,7 +356,10 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_vertical_potential = None
         self._prev_angular_potential = None
         self._phase_step = 0
-        self._x_vel_history.clear()
+        self._prev_com_position = None
+        self._com_x_vel_history.clear()
+        self._com_y_vel_history.clear()
+        self._com_z_vel_history.clear()
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
