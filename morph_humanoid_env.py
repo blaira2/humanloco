@@ -95,6 +95,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_vertical_potential = None
         self._prev_angular_potential = None
         self._prev_com_position = None
+        self._prev_x_position = None
+        self._prev_x_progress = None
 
         # -----------------------------
         # Compute robust healthy_z_range
@@ -185,6 +187,19 @@ class MorphHumanoidEnv(HumanoidEnv):
         # small constant per timestep + big penalty on fall
         self._steps_alive += 1
         alive_reward =  max_alive if not (terminated or truncated) else 0.0
+        x_position = float(self.data.qpos[0])
+        if self._prev_x_position is None:
+            x_progress = 0.0
+        else:
+            x_progress = x_position - self._prev_x_position
+        if (
+            alive_reward != 0.0
+            and self._prev_x_progress is not None
+            and x_progress <= self._prev_x_progress
+        ):
+            alive_reward *= 1.5
+        self._prev_x_position = x_position
+        self._prev_x_progress = x_progress
         # terminal penalty shrinks over time
         terminal_penalty = 500
         if not terminated:  # only if it actually fell, not time-limit
@@ -357,6 +372,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_angular_potential = None
         self._phase_step = 0
         self._prev_com_position = None
+        self._prev_x_position = None
+        self._prev_x_progress = None
         self._com_x_vel_history.clear()
         self._com_y_vel_history.clear()
         self._com_z_vel_history.clear()
