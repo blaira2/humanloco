@@ -197,7 +197,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             and self._prev_x_progress is not None
             and x_progress <= self._prev_x_progress
         ):
-            alive_reward *= 1.5
+            alive_reward *= 4
         self._prev_x_position = x_position
         self._prev_x_progress = x_progress
         # terminal penalty shrinks over time
