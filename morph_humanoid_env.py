@@ -169,7 +169,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         #Reward weights
         forward_reward_amount = 5
         com_alignment_weight = .5
-        com_progress_weight = .75
+        max_com_progress_weight = 0.75
         energy_weight = .8
         collision_weight = .1
         velocity_stability_weight = 2
@@ -290,6 +290,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         dy_outside = max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1])
         com_outside_distance = float(np.hypot(dx_outside, dy_outside))
         com_alignment_reward = com_alignment_weight * (1.0 - com_outside_distance)
+
+        phase = (self._phase_step % self.phase_cycle) / self.phase_cycle
+        com_progress_weight = max_com_progress_weight * (np.sin(2 * np.pi * phase) ** 2)
 
         if self._prev_com_distance is None:
             com_progress_reward = 0.0
