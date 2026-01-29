@@ -168,13 +168,13 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         #Reward weights
         forward_reward_amount = 5
-        com_alignment_weight = .5
+        com_alignment_weight =.1
         max_com_progress_weight = 0.75
         energy_weight = .8
-        collision_weight = .1
+        collision_weight = .05
         velocity_stability_weight = 2
         velocity_stability_deadzone = 0.05
-        max_alive = -.5
+        max_alive = -.1
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
