@@ -184,6 +184,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         velocity_stability_deadzone = 0.05
         max_alive = -.5
         replacement_reward_amount = 0.5
+        replacement_reward_constant = 0.02
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -350,7 +351,10 @@ class MorphHumanoidEnv(HumanoidEnv):
             if in_contact and not self._prev_contact_states[part_name]:
                 last_contact_x = self._last_contact_x[part_name]
                 if last_contact_x is not None and contact_x > last_contact_x:
-                    replacement_reward += replacement_reward_amount
+                    distance_gain = contact_x - last_contact_x
+                    replacement_reward += replacement_reward_amount * (
+                        replacement_reward_constant + distance_gain
+                    )
             if in_contact:
                 self._last_contact_x[part_name] = contact_x
             self._prev_contact_states[part_name] = in_contact
