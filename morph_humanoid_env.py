@@ -159,6 +159,14 @@ class MorphHumanoidEnv(HumanoidEnv):
             mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "left_hand"),
             mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "right_hand"),
         }
+        self._contact_geom_ids = {
+            "left_foot": mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "left_foot"),
+            "right_foot": mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "right_foot"),
+            "left_hand": mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "left_hand"),
+            "right_hand": mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "right_hand"),
+        }
+        self._prev_contact_states = {name: False for name in self._contact_geom_ids}
+        self._last_contact_x = {name: None for name in self._contact_geom_ids}
 
     def step(self, action):
         # ---- call original HumanoidEnv step ----
@@ -175,6 +183,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         velocity_stability_weight = 2
         velocity_stability_deadzone = 0.05
         max_alive = -.5
+        replacement_reward_amount = 0.5
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -242,6 +251,7 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         # contact penalty
         contact_penalty = 0.0
+        contact_x_by_part = {name: None for name in self._contact_geom_ids}
         for i in range(self.data.ncon):
             contact = self.data.contact[i]
             if contact.geom1 == self._ground_geom_id:
@@ -250,6 +260,13 @@ class MorphHumanoidEnv(HumanoidEnv):
                 other = contact.geom1
             else:
                 continue
+            for part_name, part_geom_id in self._contact_geom_ids.items():
+                if other == part_geom_id:
+                    contact_x = float(contact.pos[0])
+                    prev_contact_x = contact_x_by_part[part_name]
+                    if prev_contact_x is None or contact_x > prev_contact_x:
+                        contact_x_by_part[part_name] = contact_x
+                    break
             if other in self._allowed_contact_geom_ids:
                 continue
             contact_force = np.zeros(6, dtype=float)
@@ -323,9 +340,17 @@ class MorphHumanoidEnv(HumanoidEnv):
                 self.angular_velocity_shaping_gamma * angular_potential - self._prev_angular_potential
             )
         self._prev_angular_potential = angular_potential
-
-
-
+        # Contact replacement reward
+        replacement_reward = 0.0
+        for part_name, contact_x in contact_x_by_part.items():
+            in_contact = contact_x is not None
+            if in_contact and not self._prev_contact_states[part_name]:
+                last_contact_x = self._last_contact_x[part_name]
+                if last_contact_x is not None and contact_x > last_contact_x:
+                    replacement_reward += replacement_reward_amount
+            if in_contact:
+                self._last_contact_x[part_name] = contact_x
+            self._prev_contact_states[part_name] = in_contact
 
         # Combine
 
@@ -335,6 +360,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             + com_alignment_reward
             + vertical_velocity_shaping
             + angular_velocity_shaping
+            + replacement_reward
             - terminal_penalty
             - energy_penalty
             - contact_penalty
@@ -355,6 +381,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["avg_lateral_com_speed"] = float(avg_lateral_speed)
         info["avg_vertical_com_speed"] = float(avg_vertical_speed)
         info["meets_forward_criteria"] = bool(meets_forward_criteria)
+        info["replacement_reward"] = float(replacement_reward)
 
         return obs, reward, terminated, truncated, info
 
@@ -377,6 +404,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._com_x_vel_history.clear()
         self._com_y_vel_history.clear()
         self._com_z_vel_history.clear()
+        self._prev_contact_states = {name: False for name in self._contact_geom_ids}
+        self._last_contact_x = {name: None for name in self._contact_geom_ids}
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
