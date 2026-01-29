@@ -291,7 +291,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         com_outside_distance = float(np.hypot(dx_outside, dy_outside))
         com_alignment_reward = com_alignment_weight * (1.0 - com_outside_distance)
 
-        phase = (self._phase_step % self.phase_cycle) / self.phase_cycle
+        #phase = (self._phase_step % self.phase_cycle) / self.phase_cycle
         com_progress_weight = max_com_progress_weight * (np.sin(2 * np.pi * phase) ** 2)
 
         if self._prev_com_distance is None:
