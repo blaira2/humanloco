@@ -197,8 +197,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         ang_vel = self.data.qvel[3:6]  # angular vel
 
 
-        # Alive reward
-        # small constant per timestep + big penalty on fall
+        # Alive reward / penalty, is worse if no forward progress is made
         self._steps_alive += 1
         alive_reward =  max_alive if not (terminated or truncated) else 0.0
         x_position = float(self.data.qpos[0])
@@ -248,7 +247,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             0.0, velocity_delta - velocity_stability_deadzone
         )
 
-        # energy penalty = discourage huge torques
+        # energy penalty: discourage huge torques
         action = np.asarray(action)
         energy = np.sum(action**2)
         n = len(action)
@@ -285,7 +284,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             normal_force = abs(contact_force[0])
             contact_penalty += collision_weight * normal_force
 
-        # COM reward
+        # COM reward: both alignment reward and a recovery bonus
         forward_scale = 1
         lateral_scale = .6
         forward_bias = .03
@@ -354,6 +353,7 @@ class MorphHumanoidEnv(HumanoidEnv):
                 self.angular_velocity_shaping_gamma * angular_potential - self._prev_angular_potential
             )
         self._prev_angular_potential = angular_potential
+
         # Contact replacement reward
         replacement_reward = 0.0
         lift_off_reward = 0.0
