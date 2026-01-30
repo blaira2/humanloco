@@ -392,7 +392,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         )
 
         info["energy_penalty"] = float(energy_penalty)
-        info["fatigue_multiplier"] = self.fatigue_multiplier.tolist()
+        info["fatigue_multiplier"] = float(np.mean(self.fatigue_multiplier))
         info["forward_reward"] = float(forward_reward)
         info["com_reward"] = float(com_alignment_reward)
         info["vertical_velocity_shaping"] = float(vertical_velocity_shaping)
