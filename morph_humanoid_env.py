@@ -183,8 +183,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         velocity_stability_weight = 2
         velocity_stability_deadzone = 0.05
         max_alive = -.5
-        replacement_reward_amount = 0.5
-        replacement_reward_constant = 0.02
+        replacement_reward_amount = 4
+        replacement_reward_constant = 0.05
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -310,7 +310,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         com_alignment_reward = com_alignment_weight * (1.0 - com_outside_distance)
 
         #phase = (self._phase_step % self.phase_cycle) / self.phase_cycle
-        com_progress_weight = max_com_progress_weight * (np.sin(2 * np.pi * phase) ** 2)
+        com_progress_weight = max_com_progress_weight
 
         if self._prev_com_distance is None:
             com_progress_reward = 0.0
