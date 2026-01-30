@@ -179,13 +179,13 @@ class MorphHumanoidEnv(HumanoidEnv):
         com_alignment_weight =.1
         max_com_progress_weight = 0.75
         energy_weight = .8
-        collision_weight = .05
+        collision_weight = .02
         velocity_stability_weight = 2
         velocity_stability_deadzone = 0.05
         max_alive = -.5
         replacement_reward_amount = 4
         replacement_reward_constant = 0.05
-        lift_off_reward_amount = 0.1
+        lift_off_reward_amount = 0.5
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -362,6 +362,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             if in_contact:
                 self._last_contact_x[part_name] = contact_x
             self._prev_contact_states[part_name] = in_contact
+        replacement_reward += lift_off_reward
 
         # Combine
 
@@ -372,7 +373,6 @@ class MorphHumanoidEnv(HumanoidEnv):
             + vertical_velocity_shaping
             + angular_velocity_shaping
             + replacement_reward
-            + lift_off_reward
             - terminal_penalty
             - energy_penalty
             - contact_penalty
@@ -394,7 +394,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["avg_vertical_com_speed"] = float(avg_vertical_speed)
         info["meets_forward_criteria"] = bool(meets_forward_criteria)
         info["replacement_reward"] = float(replacement_reward)
-        info["lift_off_reward"] = float(lift_off_reward)
 
         return obs, reward, terminated, truncated, info
 
