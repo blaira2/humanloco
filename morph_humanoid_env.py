@@ -113,7 +113,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.prev_com_margin = 0
         self._phase_step = 0
         self.phase_cycle = 200
-        self.fatigue_multiplier = 1.0
+        self.fatigue_multiplier = None
         self.fatigue_gain = 0.05
         self.fatigue_decay_steps = self.phase_cycle
         self.vertical_velocity_shaping_weight = 0.5
@@ -137,6 +137,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             shape=(base_space.shape[0] + 1,),
             dtype=base_space.dtype,
         )
+        self.fatigue_multiplier = np.ones(self.action_space.shape[0], dtype=float)
 
         # cache some body parts
         self.torso_geom_id = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "torso1")
@@ -250,15 +251,17 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         # energy penalty = discourage huge torques
         action = np.asarray(action)
-        energy = np.sum(action**2)
+        energy = action**2
         n = len(action)
-        torque_applied = bool(np.any(np.abs(action) > 1e-6))
-        if torque_applied:
-            self.fatigue_multiplier += self.fatigue_gain * (energy / n)
-        else:
+        torque_applied = np.abs(action) > 1e-6
+        if np.any(torque_applied):
+            self.fatigue_multiplier[torque_applied] += self.fatigue_gain * energy[torque_applied]
+        if np.any(~torque_applied):
             fatigue_decay = (self.fatigue_multiplier - 1.0) / self.fatigue_decay_steps
-            self.fatigue_multiplier = max(1.0, self.fatigue_multiplier - fatigue_decay)
-        energy_penalty = energy_weight * (energy / n) * self.fatigue_multiplier
+            self.fatigue_multiplier[~torque_applied] = np.maximum(
+                1.0, self.fatigue_multiplier[~torque_applied] - fatigue_decay[~torque_applied]
+            )
+        energy_penalty = energy_weight * float(np.sum(energy * self.fatigue_multiplier) / n)
 
         # contact penalty
         contact_penalty = 0.0
@@ -389,7 +392,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         )
 
         info["energy_penalty"] = float(energy_penalty)
-        info["fatigue_multiplier"] = float(self.fatigue_multiplier)
+        info["fatigue_multiplier"] = self.fatigue_multiplier.tolist()
         info["forward_reward"] = float(forward_reward)
         info["com_reward"] = float(com_alignment_reward)
         info["vertical_velocity_shaping"] = float(vertical_velocity_shaping)
@@ -423,7 +426,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_com_position = None
         self._prev_x_position = None
         self._prev_x_progress = None
-        self.fatigue_multiplier = 1.0
+        self.fatigue_multiplier = np.ones_like(self.fatigue_multiplier)
         self._com_x_vel_history.clear()
         self._com_y_vel_history.clear()
         self._com_z_vel_history.clear()
