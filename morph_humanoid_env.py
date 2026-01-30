@@ -113,6 +113,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.prev_com_margin = 0
         self._phase_step = 0
         self.phase_cycle = 200
+        self.fatigue_multiplier = 1.0
+        self.fatigue_gain = 0.05
+        self.fatigue_decay_steps = self.phase_cycle
         self.vertical_velocity_shaping_weight = 0.5
         self.vertical_velocity_shaping_gamma = 0.99
         self.angular_velocity_shaping_weight = 0.5
@@ -249,7 +252,13 @@ class MorphHumanoidEnv(HumanoidEnv):
         action = np.asarray(action)
         energy = np.sum(action**2)
         n = len(action)
-        energy_penalty = energy_weight * (energy / n)
+        torque_applied = bool(np.any(np.abs(action) > 1e-6))
+        if torque_applied:
+            self.fatigue_multiplier += self.fatigue_gain * (energy / n)
+        else:
+            fatigue_decay = (self.fatigue_multiplier - 1.0) / self.fatigue_decay_steps
+            self.fatigue_multiplier = max(1.0, self.fatigue_multiplier - fatigue_decay)
+        energy_penalty = energy_weight * (energy / n) * self.fatigue_multiplier
 
         # contact penalty
         contact_penalty = 0.0
@@ -380,6 +389,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         )
 
         info["energy_penalty"] = float(energy_penalty)
+        info["fatigue_multiplier"] = float(self.fatigue_multiplier)
         info["forward_reward"] = float(forward_reward)
         info["com_reward"] = float(com_alignment_reward)
         info["vertical_velocity_shaping"] = float(vertical_velocity_shaping)
@@ -414,6 +424,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_com_position = None
         self._prev_x_position = None
         self._prev_x_progress = None
+        self.fatigue_multiplier = 1.0
         self._com_x_vel_history.clear()
         self._com_y_vel_history.clear()
         self._com_z_vel_history.clear()
