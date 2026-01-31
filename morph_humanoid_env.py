@@ -171,6 +171,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         }
         self._prev_contact_states = {name: False for name in self._contact_geom_ids}
         self._last_contact_x = {name: None for name in self._contact_geom_ids}
+        self._last_lift_off_com_x = {name: None for name in self._contact_geom_ids}
 
     def step(self, action):
         # ---- call original HumanoidEnv step ----
@@ -363,7 +364,11 @@ class MorphHumanoidEnv(HumanoidEnv):
         for part_name, contact_x in contact_x_by_part.items():
             in_contact = contact_x is not None
             if not in_contact and self._prev_contact_states[part_name]:
-                lift_off_reward += lift_off_reward_amount
+                last_lift_off_com_x = self._last_lift_off_com_x[part_name]
+                if last_lift_off_com_x is not None:
+                    com_distance = max(0.0, float(com_position[0]) - last_lift_off_com_x)
+                    lift_off_reward += lift_off_reward_amount * com_distance
+                self._last_lift_off_com_x[part_name] = float(com_position[0])
             if in_contact and not self._prev_contact_states[part_name]:
                 last_contact_x = self._last_contact_x[part_name]
                 if last_contact_x is not None and contact_x > last_contact_x:
@@ -432,6 +437,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._com_z_vel_history.clear()
         self._prev_contact_states = {name: False for name in self._contact_geom_ids}
         self._last_contact_x = {name: None for name in self._contact_geom_ids}
+        self._last_lift_off_com_x = {name: None for name in self._contact_geom_ids}
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
