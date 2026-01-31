@@ -763,6 +763,7 @@ class RewardDebugCallback(BaseCallback):
                 "angular_velocity_shaping": 0.0,
                 "velocity_stability_penalty": 0.0,
                 "energy_penalty": 0.0,
+                "fatigue_multiplier": 0.0,
                 "collision_penalty": 0.0,
                 "x_progress": 0.0,
             })
@@ -791,6 +792,7 @@ class RewardDebugCallback(BaseCallback):
             s["vertical_velocity_shaping"] += info.get("vertical_velocity_shaping", 0.0)
             s["angular_velocity_shaping"] += info.get("angular_velocity_shaping", 0.0)
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
+            s["fatigue_multiplier"] += info.get("fatigue_multiplier", 0.0)
             s["collision_penalty"] += info.get("collision_penalty", 0.0)
 
 
@@ -818,6 +820,7 @@ class RewardDebugCallback(BaseCallback):
                     f"lat_p={s['velocity_penalty'] / L: .3f} | "
                     f"vel_stab_p={s['velocity_stability_penalty'] / L: .3f} | "
                     f"energy_p={s['energy_penalty'] / L: .3f} |"
+                    f"fatigue_mult={s['fatigue_multiplier'] / L: .3f} |"
                     f"contact_p={s['collision_penalty'] / L: .3f} |"
 
                 )
