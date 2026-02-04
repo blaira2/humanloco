@@ -180,17 +180,17 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_reward_amount = 5
-        com_alignment_weight =.1
-        max_com_progress_weight = 0.75
+        forward_reward_amount = 2
+        com_alignment_weight =.2
+        max_com_progress_weight = 0.2
         energy_weight = .8
         collision_weight = .02
         velocity_stability_weight = 2
         velocity_stability_deadzone = 0.05
         max_alive = -.5
-        replacement_reward_amount = 4
-        replacement_reward_constant = 0.05
-        lift_off_reward_amount = 0.5
+        replacement_reward_amount = 6
+        step_reward_constant = 0.01
+        lift_off_reward_amount = 8
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -367,14 +367,14 @@ class MorphHumanoidEnv(HumanoidEnv):
                 last_lift_off_com_x = self._last_lift_off_com_x[part_name]
                 if last_lift_off_com_x is not None:
                     com_distance = max(0.0, float(com_position[0]) - last_lift_off_com_x)
-                    lift_off_reward += lift_off_reward_amount * com_distance
+                    lift_off_reward += lift_off_reward_amount * (step_reward_constant +com_distance)
                 self._last_lift_off_com_x[part_name] = float(com_position[0])
             if in_contact and not self._prev_contact_states[part_name]:
                 last_contact_x = self._last_contact_x[part_name]
                 if last_contact_x is not None and contact_x > last_contact_x:
                     distance_gain = contact_x - last_contact_x
                     replacement_reward += replacement_reward_amount * (
-                        replacement_reward_constant + distance_gain
+                        step_reward_constant + distance_gain
                     )
             if in_contact:
                 self._last_contact_x[part_name] = contact_x
