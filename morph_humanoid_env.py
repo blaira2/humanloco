@@ -189,7 +189,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         velocity_stability_deadzone = 0.05
         max_alive = -.5
         replacement_reward_amount = 6
-        step_reward_constant = 0.01
         lift_off_reward_amount = 8
 
         # Base kinematics
@@ -240,6 +239,7 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         target_speed = 1.5
         forward_reward = forward_reward_amount * np.log1p(avg_forward_speed / target_speed)
+        step_reward_constant = 0.0 if avg_forward_speed > target_speed else 0.01
 
         #Velocity history stability
         velocity_delta = abs(x_vel - avg_forward_speed)
