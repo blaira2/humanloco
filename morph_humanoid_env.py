@@ -120,9 +120,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.vertical_velocity_shaping_gamma = 0.99
         self.angular_velocity_shaping_weight = 0.5
         self.angular_velocity_shaping_gamma = 0.99
-        self._com_x_vel_history = deque(maxlen=5)
-        self._com_y_vel_history = deque(maxlen=5)
-        self._com_z_vel_history = deque(maxlen=5)
+        self._com_x_vel_history = deque(maxlen=10)
+        self._com_y_vel_history = deque(maxlen=10)
+        self._com_z_vel_history = deque(maxlen=10)
 
         super().__init__(
             xml_file=xml_file,
@@ -215,7 +215,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             alive_reward *= 4
         self._prev_x_position = x_position
         self._prev_x_progress = x_progress
-        # terminal penalty shrinks over time
+        # terminal penalty
         terminal_penalty = 500
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
@@ -237,11 +237,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         avg_forward_speed = float(np.mean(self._com_x_vel_history))
         avg_lateral_speed = float(np.mean(self._com_y_vel_history))
         avg_vertical_speed = float(np.mean(self._com_z_vel_history))
-        max_other_speed = max(avg_lateral_speed, avg_vertical_speed)
 
-        min_forward_speed = 0.1
-        meets_forward_criteria = avg_forward_speed > min_forward_speed and avg_forward_speed > 2.0 * max_other_speed
-        forward_reward = forward_reward_amount if meets_forward_criteria else 0.0
+        target_speed = 1.5
+        forward_reward = forward_reward_amount * np.log1p(avg_forward_speed / target_speed)
 
         #Velocity history stability
         velocity_delta = abs(x_vel - avg_forward_speed)
@@ -410,7 +408,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         info["avg_forward_com_speed"] = float(avg_forward_speed)
         info["avg_lateral_com_speed"] = float(avg_lateral_speed)
         info["avg_vertical_com_speed"] = float(avg_vertical_speed)
-        info["meets_forward_criteria"] = bool(meets_forward_criteria)
         info["replacement_reward"] = float(replacement_reward)
 
         return obs, reward, terminated, truncated, info
