@@ -180,7 +180,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         #Reward weights
-        forward_reward_amount = 2
+        forward_reward_amount = 6
         com_alignment_weight =.2
         max_com_progress_weight = 0.2
         energy_weight = .8
@@ -188,7 +188,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         velocity_stability_weight = 2
         velocity_stability_deadzone = 0.05
         max_alive = -.5
-        replacement_reward_amount = 6
+        replacement_reward_amount = 10
         lift_off_reward_amount = 8
 
         # Base kinematics
@@ -196,7 +196,6 @@ class MorphHumanoidEnv(HumanoidEnv):
         y_vel = float(self.data.qvel[1])  # lateral speed
         z_vel = float(self.data.qvel[2])  # downward speed
         ang_vel = self.data.qvel[3:6]  # angular vel
-
 
         # Alive reward / penalty, is worse if no forward progress is made
         self._steps_alive += 1
@@ -215,7 +214,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_x_position = x_position
         self._prev_x_progress = x_progress
         # terminal penalty
-        terminal_penalty = 500
+        terminal_penalty = 400
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
 
@@ -239,7 +238,7 @@ class MorphHumanoidEnv(HumanoidEnv):
 
         target_speed = 1.5
         forward_reward = forward_reward_amount * np.log1p(avg_forward_speed / target_speed)
-        step_reward_constant = 0.0 if avg_forward_speed > target_speed else 0.01
+        step_reward_constant = 0.0 if avg_forward_speed > target_speed else 0.075
 
         #Velocity history stability
         velocity_delta = abs(x_vel - avg_forward_speed)
