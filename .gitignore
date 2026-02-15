@@ -8,3 +8,5 @@
 *.pkl
 *.csv
 /test_videos
+/humanoid_custom_gcn_videos
+/__pycache__
