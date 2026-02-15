@@ -15,6 +15,8 @@ import os
 from humanoid_variants import VARIANTS
 from morph_humanoid_env import MorphHumanoidEnv, compute_start_height
 from balance_humanoid_env import BalanceHumanoidEnv
+from graph_balance_env import GraphBalanceHumanoidEnv
+from gcn_extractor import HumanoidGCNExtractor
 
 
 default_params = dict(
@@ -99,6 +101,29 @@ def make_balance_env(xml_file, morph_params=None, seed=0, max_episode_steps=1000
         return env
     return _init
 
+def make_graph_balance_env(
+    xml_file,
+    morph_params=None,
+    seed=0,
+    max_episode_steps=1000,
+    node_feature_dim=8,
+    global_feature_dim=32,
+):
+    def _init():
+        env = GraphBalanceHumanoidEnv(
+            xml_file=xml_file,
+            morph_params=morph_params,
+            render_mode=None,
+            node_feature_dim=node_feature_dim,
+            global_feature_dim=global_feature_dim,
+        )
+        env = TimeLimit(env, max_episode_steps=max_episode_steps)
+        env.reset(seed=seed)
+        return env
+
+    return _init
+
+
 class VideoEveryNEpisodesCallback(BaseCallback):
     def __init__(
         self,
@@ -171,18 +196,30 @@ sac_policy_kwargs = dict( # MLP for SAC (actor/critic)
         net_arch=[256, 256]
     )
 
+graph_policy_kwargs = dict(
+    features_extractor_class=HumanoidGCNExtractor,
+    features_extractor_kwargs=dict(
+        gcn_hidden_dim=64,
+        gcn_layers=2,
+        global_hidden_dim=64,
+        features_dim=128,
+    ),
+    net_arch=dict(pi=[128, 64], vf=[128, 64]),
+)
+
 def convert_sac_to_ppo(
     sac_model,
     vec_env,
     lr_schedule,
     parallel_envs,
+    ppo_policy="MlpPolicy",
     ppo_policy_kwargs=None,
 ):
     if ppo_policy_kwargs is None:
         ppo_policy_kwargs = policy_kwargs
 
     ppo_model = PPO(
-        "MlpPolicy",
+        ppo_policy,
         vec_env,
         policy_kwargs=ppo_policy_kwargs,
         n_steps=2048 // parallel_envs,   # good rule-of-thumb
@@ -220,7 +257,8 @@ def train_balance_env(
         initial_learning_rate=2e-4,
         video_every=10,
         max_episode_steps=1000,
-        pretrained_model=None):
+        pretrained_model=None,
+        ppo_policy="MlpPolicy"):
 
     xml_path = os.path.abspath(xml_file)
 
@@ -263,7 +301,7 @@ def train_balance_env(
     # ---------- MODEL ----------
     if pretrained_model is None:
         model = PPO(
-            "MlpPolicy",
+            ppo_policy,
             vec_env,
             policy_kwargs=policy_kwargs,
             n_steps=2048 // parallel_envs,   # good rule-of-thumb
@@ -310,6 +348,92 @@ def train_balance_env(
 
     return model
 
+
+def train_graph_balance_env(
+        variant_name,
+        cfg,
+        xml_file,
+        timesteps=300_000,
+        parallel_envs=3,
+        initial_learning_rate=2e-4,
+        video_every=10,
+        max_episode_steps=1000,
+        pretrained_model=None,
+        ppo_policy="MultiInputPolicy",
+        node_feature_dim=8,
+        global_feature_dim=32,
+):
+
+    xml_path = os.path.abspath(xml_file)
+
+    env_fns = [
+        make_graph_balance_env(
+            xml_path,
+            morph_params=cfg,
+            seed=i,
+            max_episode_steps=max_episode_steps,
+            node_feature_dim=node_feature_dim,
+            global_feature_dim=global_feature_dim,
+        )
+        for i in range(parallel_envs)
+    ]
+    if parallel_envs == 1:
+        vec_env = DummyVecEnv(env_fns)
+    else:
+        vec_env = SubprocVecEnv(env_fns)
+
+    vec_env = VecMonitor(vec_env)
+
+    logger = configure(folder=f"./logs_{variant_name}", format_strings=["stdout", "csv", "tensorboard"])
+
+    final_lr = initial_learning_rate * .1
+    lr_schedule = LinearSchedule(start=1e-4, end=final_lr, end_fraction=.9)
+
+    if pretrained_model is None:
+        model = PPO(
+            ppo_policy,
+            vec_env,
+            policy_kwargs=graph_policy_kwargs,
+            n_steps=2048 // parallel_envs,
+            batch_size=128,
+            learning_rate=lr_schedule,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=0.01,
+            verbose=1,
+        )
+    elif isinstance(pretrained_model, (str, os.PathLike)):
+        model = PPO.load(pretrained_model, env=vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
+    else:
+        model = pretrained_model
+        model.set_env(vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
+    model.set_logger(logger)
+
+    video_cb = VideoEveryNEpisodesCallback(
+        video_every=video_every,
+        xml_file=xml_path,
+        morph=cfg,
+        out_dir=f"{variant_name}_videos",
+        env_cls=GraphBalanceHumanoidEnv,
+        max_episode_steps=max_episode_steps,
+    )
+
+    debug_cb = RewardDebugCallback()
+
+    print(f"\n🚀 Training graph PPO for {variant_name} ...")
+    model.learn(total_timesteps=timesteps, callback=[video_cb, debug_cb])
+
+    model.save(f"{variant_name}_graph_ppo.zip")
+    vec_env.close()
+    print(f"✔️ Graph training complete for {variant_name}")
+
+    return model
+
 def train_balance_env_sac(
         variant_name,
         cfg,
@@ -319,7 +443,8 @@ def train_balance_env_sac(
         initial_learning_rate=3e-4,
         video_every=10,
         max_episode_steps=1000,
-        pretrained_model=None):
+        pretrained_model=None,
+        sac_policy="MlpPolicy"):
 
     xml_path = os.path.abspath(xml_file)
 
@@ -362,7 +487,7 @@ def train_balance_env_sac(
     # ---------- MODEL ----------
     if pretrained_model is None:
         model = SAC(
-            "MlpPolicy",
+            sac_policy,
             vec_env,
             policy_kwargs=sac_policy_kwargs,
             learning_rate=lr_schedule,
@@ -419,7 +544,8 @@ def train_variant_sac(
         initial_learning_rate=3e-4,
         video_every=10,
         max_episode_steps=1000,
-        pretrained_model=None):
+        pretrained_model=None,
+        sac_policy="MlpPolicy"):
 
     xml_path = os.path.abspath(xml_file)
 
@@ -462,7 +588,7 @@ def train_variant_sac(
     # ---------- MODEL ----------
     if pretrained_model is None:
         model = SAC(
-            "MlpPolicy",
+            sac_policy,
             vec_env,
             policy_kwargs=sac_policy_kwargs,
             learning_rate=lr_schedule,
@@ -519,7 +645,8 @@ def train_variant(
         initial_learning_rate=2e-4,
         video_every=10,
         max_episode_steps=1000,
-        pretrained_model=None):
+        pretrained_model=None,
+        ppo_policy="MlpPolicy"):
 
     xml_path = os.path.abspath(xml_file)
 
@@ -557,7 +684,7 @@ def train_variant(
     # ---------- MODEL ----------
     if pretrained_model is None:
         model = PPO(
-            "MlpPolicy",
+            ppo_policy,
             vec_env,
             policy_kwargs=policy_kwargs,
             n_steps=2048 // parallel_envs,   # good rule-of-thumb
@@ -575,6 +702,7 @@ def train_variant(
             vec_env,
             lr_schedule,
             parallel_envs,
+            ppo_policy=ppo_policy,
         )
     elif isinstance(pretrained_model, (str, os.PathLike)):
         if str(pretrained_model).endswith("_sac.zip"):
@@ -584,6 +712,7 @@ def train_variant(
                 vec_env,
                 lr_schedule,
                 parallel_envs,
+                ppo_policy=ppo_policy,
             )
         else:
             model = PPO.load(pretrained_model, env=vec_env)
