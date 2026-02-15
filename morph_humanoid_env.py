@@ -120,9 +120,9 @@ class MorphHumanoidEnv(HumanoidEnv):
         self.vertical_velocity_shaping_gamma = 0.99
         self.angular_velocity_shaping_weight = 0.5
         self.angular_velocity_shaping_gamma = 0.99
-        self._com_x_vel_history = deque(maxlen=10)
-        self._com_y_vel_history = deque(maxlen=10)
-        self._com_z_vel_history = deque(maxlen=10)
+        self._com_x_vel_history = deque(maxlen=8)
+        self._com_y_vel_history = deque(maxlen=8)
+        self._com_z_vel_history = deque(maxlen=8)
 
         super().__init__(
             xml_file=xml_file,
@@ -186,10 +186,11 @@ class MorphHumanoidEnv(HumanoidEnv):
         energy_weight = .8
         collision_weight = .02
         velocity_stability_weight = 2
-        velocity_stability_deadzone = 0.05
-        max_alive = -.5
-        replacement_reward_amount = 10
-        lift_off_reward_amount = 8
+        velocity_stability_deadzone = 0.075
+        max_alive = -.2
+        replacement_reward_amount = 6
+        lift_off_reward_amount = 6
+        step_constant_max = 0.15
 
         # Base kinematics
         x_vel = float(self.data.qvel[0])  # forward speed
@@ -237,8 +238,8 @@ class MorphHumanoidEnv(HumanoidEnv):
         avg_vertical_speed = float(np.mean(self._com_z_vel_history))
 
         target_speed = 1.5
-        forward_reward = forward_reward_amount * np.log1p(avg_forward_speed / target_speed)
-        step_reward_constant = 0.0 if avg_forward_speed > target_speed else 0.075
+        forward_reward = forward_reward_amount * (forward_speed + np.log1p(avg_forward_speed / target_speed))
+        step_reward_constant = 0.0 if avg_forward_speed > target_speed else step_constant_max
 
         #Velocity history stability
         velocity_delta = abs(x_vel - avg_forward_speed)
@@ -355,7 +356,7 @@ class MorphHumanoidEnv(HumanoidEnv):
             )
         self._prev_angular_potential = angular_potential
 
-        # Contact replacement reward
+        # Foot contact replacement reward
         replacement_reward = 0.0
         lift_off_reward = 0.0
         for part_name, contact_x in contact_x_by_part.items():
