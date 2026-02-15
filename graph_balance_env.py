@@ -13,10 +13,14 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         morph_params=None,
         node_feature_dim=8,
         global_feature_dim=32,
+        reset_height_step=0.0025,
+        reset_max_drop=0.2,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
         self.global_feature_dim = int(global_feature_dim)
+        self.reset_height_step = float(reset_height_step)
+        self.reset_max_drop = float(reset_max_drop)
         super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
 
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
@@ -90,7 +94,44 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
+        self._lower_to_ground_contact_threshold()
+        obs = self._get_obs()
         return self._flat_to_graph_obs(obs), info
+
+    def _lower_to_ground_contact_threshold(self):
+        """Lower root body until floor contact would occur, then keep last safe pose."""
+        if self.reset_height_step <= 0.0 or self.reset_max_drop <= 0.0:
+            return
+
+        try:
+            floor_geom_id = self.model.geom("floor").id
+        except KeyError:
+            return
+
+        base_qpos = self.data.qpos.copy()
+        base_qvel = np.zeros_like(self.data.qvel)
+
+        num_steps = int(np.floor(self.reset_max_drop / self.reset_height_step))
+        last_safe_qpos = base_qpos.copy()
+
+        for step_idx in range(1, num_steps + 1):
+            candidate_qpos = base_qpos.copy()
+            candidate_qpos[2] -= step_idx * self.reset_height_step
+            self.set_state(candidate_qpos, base_qvel)
+
+            has_floor_contact = False
+            for contact_idx in range(self.data.ncon):
+                contact = self.data.contact[contact_idx]
+                if contact.geom1 == floor_geom_id or contact.geom2 == floor_geom_id:
+                    has_floor_contact = True
+                    break
+
+            if has_floor_contact:
+                break
+
+            last_safe_qpos = candidate_qpos
+
+        self.set_state(last_safe_qpos, base_qvel)
 
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
