@@ -16,6 +16,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         reset_height_step=0.0025,
         reset_max_drop=0.2,
         com_safe_window_weight=0.5,
+        min_tilt_failure_height_ratio=0.55,
+        min_tilt_failure_height_floor=0.6,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
@@ -23,6 +25,10 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.reset_height_step = float(reset_height_step)
         self.reset_max_drop = float(reset_max_drop)
         self.com_safe_window_weight = float(com_safe_window_weight)
+        self._min_tilt_failure_height_ratio = float(min_tilt_failure_height_ratio)
+        self._min_tilt_failure_height_floor = float(min_tilt_failure_height_floor)
+        self._use_morphology_aware_healthy_z_range = "healthy_z_range" not in kwargs
+
         super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
 
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
@@ -138,9 +144,23 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             "global_features": global_features.astype(np.float32),
         }
 
+    def _set_morphology_aware_healthy_z_range(self):
+        if not self._use_morphology_aware_healthy_z_range:
+            return
+
+        # Humanoid-v5 fall/tilt termination uses healthy_z_range. Derive it
+        # from post-adjustment torso height so reset lowering is accounted for.
+        torso_z0 = float(self.data.qpos[2])
+        ratio_min = self._min_tilt_failure_height_ratio * torso_z0
+        floor_min = self._min_tilt_failure_height_floor
+        healthy_min = min(torso_z0, max(floor_min, ratio_min))
+        healthy_max = max(2.0, torso_z0 * 2.0)
+        self._healthy_z_range = (healthy_min, healthy_max)
+
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
         self._lower_to_ground_contact_threshold()
+        self._set_morphology_aware_healthy_z_range()
         obs = self._get_obs()
         return self._flat_to_graph_obs(obs), info
 
