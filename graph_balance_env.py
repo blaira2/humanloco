@@ -15,16 +15,19 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         global_feature_dim=32,
         reset_height_step=0.0025,
         reset_max_drop=0.2,
+        com_safe_window_weight=0.5,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
         self.global_feature_dim = int(global_feature_dim)
         self.reset_height_step = float(reset_height_step)
         self.reset_max_drop = float(reset_max_drop)
+        self.com_safe_window_weight = float(com_safe_window_weight)
         super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
 
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
         self._adjacency = self._build_adjacency().astype(np.float32)
+        self._limb_end_body_ids = self._find_limb_end_body_ids()
 
         self.observation_space = spaces.Dict(
             {
@@ -60,6 +63,49 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             adjacency[i, j] = 1.0
             adjacency[j, i] = 1.0
         return adjacency
+
+    def _find_limb_end_body_ids(self):
+        """Return graph leaf bodies (limb ends), excluding world and root torso."""
+        child_counts = np.zeros(self.model.nbody, dtype=np.int32)
+        for body_id in range(1, self.model.nbody):
+            parent_id = int(self.model.body_parentid[body_id])
+            if parent_id >= 0:
+                child_counts[parent_id] += 1
+
+        # Leaf nodes in the kinematic tree, ignoring world (0) and direct root (1).
+        limb_end_ids = [
+            body_id
+            for body_id in range(2, self.model.nbody)
+            if child_counts[body_id] == 0
+        ]
+        return tuple(limb_end_ids)
+
+    def _com_safe_window_reward(self):
+        """Reward CoM when it stays inside the box from outermost limb-end points."""
+        if not self._limb_end_body_ids:
+            return 0.0, False, 0.0
+
+        limb_end_xy = self.data.xipos[list(self._limb_end_body_ids), :2]
+        x_min = float(limb_end_xy[:, 0].min())
+        x_max = float(limb_end_xy[:, 0].max())
+        y_min = float(limb_end_xy[:, 1].min())
+        y_max = float(limb_end_xy[:, 1].max())
+
+        com_xy = self.data.subtree_com[0][:2]
+        inside_x = x_min <= float(com_xy[0]) <= x_max
+        inside_y = y_min <= float(com_xy[1]) <= y_max
+        inside_window = inside_x and inside_y
+
+        dx_outside = max(x_min - com_xy[0], 0.0, com_xy[0] - x_max)
+        dy_outside = max(y_min - com_xy[1], 0.0, com_xy[1] - y_max)
+        outside_distance = float(np.hypot(dx_outside, dy_outside))
+
+        if inside_window:
+            safe_window_reward = self.com_safe_window_weight
+        else:
+            safe_window_reward = 0.0
+
+        return safe_window_reward, inside_window, outside_distance
 
     def _flat_to_graph_obs(self, flat_obs):
         flat_obs = np.asarray(flat_obs, dtype=np.float32)
@@ -135,4 +181,14 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
 
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
+
+        safe_window_reward, com_inside_window, com_window_outside_distance = (
+            self._com_safe_window_reward()
+        )
+        reward += safe_window_reward
+
+        info["com_safe_window_reward"] = float(safe_window_reward)
+        info["com_inside_limb_window"] = bool(com_inside_window)
+        info["com_window_outside_distance"] = float(com_window_outside_distance)
+
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
