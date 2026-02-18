@@ -207,46 +207,6 @@ graph_policy_kwargs = dict(
     net_arch=dict(pi=[128, 64], vf=[128, 64]),
 )
 
-def convert_sac_to_ppo(
-    sac_model,
-    vec_env,
-    lr_schedule,
-    parallel_envs,
-    ppo_policy="MlpPolicy",
-    ppo_policy_kwargs=None,
-):
-    if ppo_policy_kwargs is None:
-        ppo_policy_kwargs = policy_kwargs
-
-    ppo_model = PPO(
-        ppo_policy,
-        vec_env,
-        policy_kwargs=ppo_policy_kwargs,
-        n_steps=2048 // parallel_envs,   # good rule-of-thumb
-        batch_size=128,
-        learning_rate=lr_schedule,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
-        verbose=1,
-    )
-
-    sac_state = sac_model.policy.state_dict()
-    ppo_state = ppo_model.policy.state_dict()
-    matched_state = {
-        key: val
-        for key, val in sac_state.items()
-        if key in ppo_state and ppo_state[key].shape == val.shape
-    }
-    if matched_state:
-        ppo_state.update(matched_state)
-        ppo_model.policy.load_state_dict(ppo_state)
-        print(f"[convert] Copied {len(matched_state)} matching policy tensors from SAC to PPO.")
-    else:
-        print("[convert] No matching policy tensors found between SAC and PPO.")
-
-    return ppo_model
 
 def train_balance_env(
         variant_name,
