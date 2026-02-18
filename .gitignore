@@ -10,3 +10,5 @@
 /test_videos
 /humanoid_custom_gcn_videos
 /__pycache__
+/logs_humanoid_custom_gcn
+/.ipynb_checkpoints
