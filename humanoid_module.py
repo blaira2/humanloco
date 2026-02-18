@@ -207,6 +207,17 @@ graph_policy_kwargs = dict(
     net_arch=dict(pi=[128, 64], vf=[128, 64]),
 )
 
+graph_sac_policy_kwargs = dict(
+    features_extractor_class=HumanoidGCNExtractor,
+    features_extractor_kwargs=dict(
+        gcn_hidden_dim=64,
+        gcn_layers=2,
+        global_hidden_dim=64,
+        features_dim=128,
+    ),
+    net_arch=dict(pi=[128, 64], qf=[128, 64]),
+)
+
 
 def train_balance_env(
         variant_name,
@@ -315,11 +326,11 @@ def train_graph_balance_env(
         xml_file,
         timesteps=300_000,
         parallel_envs=3,
-        initial_learning_rate=2e-4,
+        initial_learning_rate=3e-4,
         video_every=10,
         max_episode_steps=1000,
         pretrained_model=None,
-        ppo_policy="MultiInputPolicy",
+        sac_policy="MultiInputPolicy",
         node_feature_dim=8,
         global_feature_dim=32,
 ):
@@ -350,21 +361,23 @@ def train_graph_balance_env(
     lr_schedule = LinearSchedule(start=1e-4, end=final_lr, end_fraction=.9)
 
     if pretrained_model is None:
-        model = PPO(
-            ppo_policy,
+        model = SAC(
+            sac_policy,
             vec_env,
-            policy_kwargs=graph_policy_kwargs,
-            n_steps=2048 // parallel_envs,
-            batch_size=128,
+            policy_kwargs=graph_sac_policy_kwargs,
             learning_rate=lr_schedule,
+            buffer_size=1_000_000,
+            batch_size=256,
             gamma=0.99,
-            gae_lambda=0.95,
-            clip_range=0.2,
-            ent_coef=0.01,
+            tau=0.005,
+            train_freq=1,
+            gradient_steps=1,
+            learning_starts=10_000,
+            ent_coef="auto",
             verbose=1,
         )
     elif isinstance(pretrained_model, (str, os.PathLike)):
-        model = PPO.load(pretrained_model, env=vec_env)
+        model = SAC.load(pretrained_model, env=vec_env)
         model.learning_rate = lr_schedule
         model.lr_schedule = lr_schedule
     else:
@@ -385,10 +398,10 @@ def train_graph_balance_env(
 
     debug_cb = RewardDebugCallback()
 
-    print(f"\n🚀 Training graph PPO for {variant_name} ...")
+    print(f"\n🚀 Training graph SAC for {variant_name} ...")
     model.learn(total_timesteps=timesteps, callback=[video_cb, debug_cb])
 
-    model.save(f"{variant_name}_graph_ppo.zip")
+    model.save(f"{variant_name}_graph_sac.zip")
     vec_env.close()
     print(f"✔️ Graph training complete for {variant_name}")
 

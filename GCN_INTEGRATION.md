@@ -15,8 +15,8 @@ This repo now includes a concrete graph training path for balance control.
   - `HumanoidGCNExtractor` (GCN stack + global MLP + readout)
 - `humanoid_module.py` additions:
   - `make_graph_balance_env(...)`
-  - `graph_policy_kwargs` using `HumanoidGCNExtractor`
-  - `train_graph_balance_env(...)` using PPO `MultiInputPolicy`
+  - `graph_policy_kwargs`/`graph_sac_policy_kwargs` using `HumanoidGCNExtractor`
+  - `train_graph_balance_env(...)` using SAC `MultiInputPolicy`
 
 ## How to train
 
@@ -24,5 +24,5 @@ Use `train_graph_balance_env(...)` (instead of `train_balance_env(...)`) to trai
 
 ## Purpose of the GCN extractor
 
-The GCN extractor is the feature encoder between graph observations and PPO heads.
-It maps node/edge structure + global features into a dense latent vector used by policy and value networks.
+The GCN extractor is the feature encoder between graph observations and SAC heads.
+It maps node/edge structure + global features into a dense latent vector used by actor and critic networks.
