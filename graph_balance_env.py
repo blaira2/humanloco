@@ -15,7 +15,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         global_feature_dim=32,
         reset_height_step=0.0025,
         reset_max_drop=0.2,
-        com_safe_window_weight=0.5,
+        com_safe_window_weight=1,
         velocity_shaping_weight=0.5,
         velocity_shaping_gamma=0.99,
         angular_velocity_shaping_weight=0.5,
@@ -245,14 +245,16 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             )
         self._prev_angular_velocity_potential = angular_velocity_potential
 
-        ##-------- Reward -------##
-        reward += velocity_shaping + angular_velocity_shaping
 
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
         )
 
-        reward += safe_window_reward
+        ##-------- Reward -------##
+        reward += (velocity_shaping
+                   + angular_velocity_shaping
+                   + safe_window_reward)
+
 
         info["velocity_shaping"] = float(velocity_shaping)
         info["angular_velocity_shaping"] = float(angular_velocity_shaping)
