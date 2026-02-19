@@ -16,6 +16,10 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         reset_height_step=0.0025,
         reset_max_drop=0.2,
         com_safe_window_weight=0.5,
+        velocity_shaping_weight=0.5,
+        velocity_shaping_gamma=0.99,
+        angular_velocity_shaping_weight=0.5,
+        angular_velocity_shaping_gamma=0.99,
         min_tilt_failure_height_ratio=0.55,
         min_tilt_failure_height_floor=0.6,
         **kwargs,
@@ -25,9 +29,15 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.reset_height_step = float(reset_height_step)
         self.reset_max_drop = float(reset_max_drop)
         self.com_safe_window_weight = float(com_safe_window_weight)
+        self.velocity_shaping_weight = float(velocity_shaping_weight)
+        self.velocity_shaping_gamma = float(velocity_shaping_gamma)
+        self.angular_velocity_shaping_weight = float(angular_velocity_shaping_weight)
+        self.angular_velocity_shaping_gamma = float(angular_velocity_shaping_gamma)
         self._min_tilt_failure_height_ratio = float(min_tilt_failure_height_ratio)
         self._min_tilt_failure_height_floor = float(min_tilt_failure_height_floor)
         self._use_morphology_aware_healthy_z_range = "healthy_z_range" not in kwargs
+        self._prev_velocity_potential = None
+        self._prev_angular_velocity_potential = None
 
         super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
 
@@ -159,6 +169,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
+        self._prev_velocity_potential = None
+        self._prev_angular_velocity_potential = None
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
         obs = self._get_obs()
@@ -202,11 +214,47 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
 
+        root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
+        non_forward_components = np.array(
+            [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
+            dtype=float,
+        )
+        non_forward_speed = float(np.linalg.norm(non_forward_components))
+
+        root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
+        angular_speed = float(np.linalg.norm(root_ang_vel))
+
+        velocity_potential = -non_forward_speed
+        if self._prev_velocity_potential is None:
+            velocity_shaping = 0.0
+        else:
+            velocity_shaping = self.velocity_shaping_weight * (
+                self.velocity_shaping_gamma * velocity_potential
+                - self._prev_velocity_potential
+            )
+        self._prev_velocity_potential = velocity_potential
+
+        angular_velocity_potential = -angular_speed
+        if self._prev_angular_velocity_potential is None:
+            angular_velocity_shaping = 0.0
+        else:
+            angular_velocity_shaping = self.angular_velocity_shaping_weight * (
+                self.angular_velocity_shaping_gamma * angular_velocity_potential
+                - self._prev_angular_velocity_potential
+            )
+        self._prev_angular_velocity_potential = angular_velocity_potential
+
+        reward += velocity_shaping + angular_velocity_shaping
+
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
         )
         reward += safe_window_reward
 
+        info["velocity_shaping"] = float(velocity_shaping)
+        info["angular_velocity_shaping"] = float(angular_velocity_shaping)
+        info["non_forward_speed"] = float(non_forward_speed)
+        info["angular_speed"] = float(angular_speed)
         info["com_safe_window_reward"] = float(safe_window_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
