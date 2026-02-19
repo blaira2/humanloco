@@ -224,6 +224,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
         angular_speed = float(np.linalg.norm(root_ang_vel))
 
+        ## potential based shaping
         velocity_potential = -non_forward_speed
         if self._prev_velocity_potential is None:
             velocity_shaping = 0.0
@@ -244,11 +245,13 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             )
         self._prev_angular_velocity_potential = angular_velocity_potential
 
+        ##-------- Reward -------##
         reward += velocity_shaping + angular_velocity_shaping
 
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
         )
+
         reward += safe_window_reward
 
         info["velocity_shaping"] = float(velocity_shaping)

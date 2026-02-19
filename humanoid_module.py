@@ -862,6 +862,7 @@ class RewardDebugCallback(BaseCallback):
                 "replacement_reward": 0.0,
                 "velocity_penalty": 0.0,
                 "vertical_velocity_shaping": 0.0,
+                "velocity_shaping": 0.0,
                 "angular_velocity_shaping": 0.0,
                 "velocity_stability_penalty": 0.0,
                 "energy_penalty": 0.0,
@@ -892,6 +893,7 @@ class RewardDebugCallback(BaseCallback):
             s["velocity_stability_penalty"] += info.get("velocity_stability_penalty", 0.0)
             s["velocity_penalty"] += info.get("velocity_penalty", 0.0)
             s["vertical_velocity_shaping"] += info.get("vertical_velocity_shaping", 0.0)
+            s["velocity_shaping"] += info.get("velocity_shaping", 0.0)
             s["angular_velocity_shaping"] += info.get("angular_velocity_shaping", 0.0)
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
             s["fatigue_multiplier"] += info.get("fatigue_multiplier", 0.0)
@@ -914,6 +916,7 @@ class RewardDebugCallback(BaseCallback):
                     f"R_mean={s['total'] / L: .3f} | "
                     f"fwd={s['forward'] / L: .3f} | "
                     f"alive={s['alive'] / L: .3f} | "
+                    f"v_shaping={s['velocity_shaping'] / L: .3f} | "
                     f"vv_shaping={s['vertical_velocity_shaping'] / L: .3f} | "
                     f"av_shaping={s['angular_velocity_shaping'] / L: .3f} | "
                     f"com={s['com_reward'] / L: .3f} | "
