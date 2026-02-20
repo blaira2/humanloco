@@ -233,6 +233,11 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
 
+        terminal_unhealthy_penalty = 0.0
+        if terminated and not truncated and not self.is_healthy:
+            terminal_unhealthy_penalty = 100.0
+            reward -= terminal_unhealthy_penalty
+
         root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
         non_forward_components = np.array(
             [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
@@ -282,5 +287,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_safe_window_reward"] = float(safe_window_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
+        info["terminal_unhealthy_penalty"] = float(terminal_unhealthy_penalty)
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
