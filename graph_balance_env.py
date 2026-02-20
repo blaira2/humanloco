@@ -48,6 +48,11 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
         self._adjacency = self._build_adjacency().astype(np.float32)
         self._limb_end_body_ids = self._find_limb_end_body_ids()
+        self._limb_end_viz_body_ids, self._limb_end_geom_ids = self._find_limb_end_geom_ids()
+        self._default_limb_end_rgba = {
+            geom_id: np.array(self.model.geom_rgba[geom_id], dtype=float)
+            for geom_id in self._limb_end_geom_ids
+        }
 
         self.observation_space = spaces.Dict(
             {
@@ -100,6 +105,73 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         ]
         return tuple(limb_end_ids)
 
+    def _find_limb_end_geom_ids(self):
+        """Return geom ids associated with each limb-end body, in matching order."""
+        body_ids = []
+        geom_ids = []
+        for body_id in self._limb_end_body_ids:
+            geom_id = int(self.model.body_geomadr[body_id])
+            geom_count = int(self.model.body_geomnum[body_id])
+            if geom_count <= 0 or geom_id < 0:
+                continue
+            body_ids.append(body_id)
+            geom_ids.append(geom_id)
+        return tuple(body_ids), tuple(geom_ids)
+
+    def _set_limb_end_geom_rgba(self, geom_id, rgba):
+        self.model.geom_rgba[geom_id] = np.asarray(rgba, dtype=float)
+
+    def _reset_com_component_visualization(self):
+        for geom_id, rgba in self._default_limb_end_rgba.items():
+            self._set_limb_end_geom_rgba(geom_id, rgba)
+
+    def _update_com_component_visualization(self, com_xy):
+        if not self._limb_end_geom_ids:
+            return
+
+        limb_end_xy = self.data.xipos[list(self._limb_end_viz_body_ids), :2]
+
+        role_colors = {
+            "x_min": np.array([0.95, 0.2, 0.2, 1.0], dtype=float),
+            "x_max": np.array([0.2, 0.9, 0.2, 1.0], dtype=float),
+            "y_min": np.array([0.25, 0.45, 1.0, 1.0], dtype=float),
+            "y_max": np.array([0.95, 0.9, 0.2, 1.0], dtype=float),
+        }
+        base_color = np.array([0.35, 0.35, 0.35, 1.0], dtype=float)
+
+        idx_x_min = int(np.argmin(limb_end_xy[:, 0]))
+        idx_x_max = int(np.argmax(limb_end_xy[:, 0]))
+        idx_y_min = int(np.argmin(limb_end_xy[:, 1]))
+        idx_y_max = int(np.argmax(limb_end_xy[:, 1]))
+        role_by_idx = {}
+        for idx, role in (
+            (idx_x_min, "x_min"),
+            (idx_x_max, "x_max"),
+            (idx_y_min, "y_min"),
+            (idx_y_max, "y_max"),
+        ):
+            role_by_idx.setdefault(idx, []).append(role)
+
+        x_min = float(limb_end_xy[:, 0].min())
+        x_max = float(limb_end_xy[:, 0].max())
+        y_min = float(limb_end_xy[:, 1].min())
+        y_max = float(limb_end_xy[:, 1].max())
+        outside_distance = np.hypot(
+            max(x_min - com_xy[0], 0.0, com_xy[0] - x_max),
+            max(y_min - com_xy[1], 0.0, com_xy[1] - y_max),
+        )
+        alert_strength = min(1.0, float(outside_distance) / 0.1)
+        alert_tint = np.array([1.0, 0.0, 1.0, 1.0], dtype=float)
+
+        for idx, geom_id in enumerate(self._limb_end_geom_ids):
+            roles = role_by_idx.get(idx, [])
+            if roles:
+                color = np.mean([role_colors[r] for r in roles], axis=0)
+            else:
+                color = base_color.copy()
+            color = (1.0 - alert_strength) * color + alert_strength * alert_tint
+            self._set_limb_end_geom_rgba(geom_id, color)
+
     def _com_safe_window_reward(self):
         """Reward CoM when it stays inside the box from outermost limb-end points."""
         if not self._limb_end_body_ids:
@@ -112,6 +184,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         y_max = float(limb_end_xy[:, 1].max())
 
         com_xy = self.data.subtree_com[0][:2]
+        self._update_com_component_visualization(com_xy)
         inside_x = x_min <= float(com_xy[0]) <= x_max
         inside_y = y_min <= float(com_xy[1]) <= y_max
         inside_window = inside_x and inside_y
@@ -194,6 +267,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
         self._steps_alive = 0
+        self._reset_com_component_visualization()
         obs = self._get_obs()
         return self._flat_to_graph_obs(obs), info
 
