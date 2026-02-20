@@ -16,6 +16,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         reset_height_step=0.0025,
         reset_max_drop=0.2,
         com_safe_window_weight=1,
+        com_safe_window_progress_weight=0.5,
         velocity_shaping_weight=0.5,
         velocity_shaping_gamma=0.99,
         angular_velocity_shaping_weight=0.5,
@@ -29,6 +30,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.reset_height_step = float(reset_height_step)
         self.reset_max_drop = float(reset_max_drop)
         self.com_safe_window_weight = float(com_safe_window_weight)
+        self.com_safe_window_progress_weight = float(com_safe_window_progress_weight)
         self.velocity_shaping_weight = float(velocity_shaping_weight)
         self.velocity_shaping_gamma = float(velocity_shaping_gamma)
         self.angular_velocity_shaping_weight = float(angular_velocity_shaping_weight)
@@ -38,6 +40,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._use_morphology_aware_healthy_z_range = "healthy_z_range" not in kwargs
         self._prev_velocity_potential = None
         self._prev_angular_velocity_potential = None
+        self._prev_com_window_distance = None
 
         super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
 
@@ -115,11 +118,26 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         dx_outside = max(x_min - com_xy[0], 0.0, com_xy[0] - x_max)
         dy_outside = max(y_min - com_xy[1], 0.0, com_xy[1] - y_max)
         outside_distance = float(np.hypot(dx_outside, dy_outside))
+        window_center = np.array(
+            [(x_min + x_max) / 2.0, (y_min + y_max) / 2.0],
+            dtype=float,
+        )
+        com_window_distance = float(np.linalg.norm(com_xy - window_center))
 
         if inside_window:
             safe_window_reward = self.com_safe_window_weight
         else:
             safe_window_reward = 0.0
+
+        if self._prev_com_window_distance is None:
+            progress_reward = 0.0
+        else:
+            progress_reward = self.com_safe_window_progress_weight * (
+                self._prev_com_window_distance - com_window_distance
+            )
+        self._prev_com_window_distance = com_window_distance
+
+        safe_window_reward += progress_reward
 
         return safe_window_reward, inside_window, outside_distance
 
@@ -171,6 +189,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         obs, info = super().reset(**kwargs)
         self._prev_velocity_potential = None
         self._prev_angular_velocity_potential = None
+        self._prev_com_window_distance = None
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
         obs = self._get_obs()
