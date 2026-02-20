@@ -41,6 +41,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_velocity_potential = None
         self._prev_angular_velocity_potential = None
         self._prev_com_window_distance = None
+        self._steps_alive = 0
 
         super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
 
@@ -192,6 +193,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_com_window_distance = None
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
+        self._steps_alive = 0
         obs = self._get_obs()
         return self._flat_to_graph_obs(obs), info
 
@@ -233,10 +235,17 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
 
-        terminal_unhealthy_penalty = 0.0
-        if terminated and not truncated and not self.is_healthy:
-            terminal_unhealthy_penalty = 100.0
-            reward -= terminal_unhealthy_penalty
+        alive_step = 1
+        self._steps_alive += 1
+        alive_reward = alive_step if not (terminated or truncated) else 0.0
+        # terminal penalty shrinks over time
+        survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
+
+        max_penalty = 100.0
+        terminal_penalty = max_penalty * (1.0 - survival_frac)
+        if not terminated:  # only if it actually fell, not time-limit
+            terminal_penalty = 0.0
+        alive_reward -= terminal_penalty
 
         root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
         non_forward_components = np.array(
@@ -275,7 +284,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         )
 
         ##-------- Reward -------##
-        reward += (velocity_shaping
+        reward += ( alive_reward
+                   + velocity_shaping
                    + angular_velocity_shaping
                    + safe_window_reward)
 
@@ -287,6 +297,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_safe_window_reward"] = float(safe_window_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
-        info["terminal_unhealthy_penalty"] = float(terminal_unhealthy_penalty)
+        info["alive_reward"] = float(alive_reward)
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
