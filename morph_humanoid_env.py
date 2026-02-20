@@ -169,6 +169,11 @@ class MorphHumanoidEnv(HumanoidEnv):
             "left_hand": mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "left_hand"),
             "right_hand": mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_GEOM, "right_hand"),
         }
+        self._com_support_part_names = list(self._contact_geom_ids.keys())
+        self._default_support_rgba = {
+            name: np.array(self.model.geom_rgba[geom_id], dtype=float)
+            for name, geom_id in self._contact_geom_ids.items()
+        }
         self._prev_contact_states = {name: False for name in self._contact_geom_ids}
         self._last_contact_x = {name: None for name in self._contact_geom_ids}
         self._last_lift_off_com_x = {name: None for name in self._contact_geom_ids}
@@ -330,6 +335,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_com_distance = weighted_distance
 
         com_alignment_reward += com_progress_reward
+        self._update_com_support_visualization(com_xy, x_limits, y_limits, support_points)
 
         # -----------------
         # Potential based shaping
@@ -435,6 +441,7 @@ class MorphHumanoidEnv(HumanoidEnv):
         self._prev_contact_states = {name: False for name in self._contact_geom_ids}
         self._last_contact_x = {name: None for name in self._contact_geom_ids}
         self._last_lift_off_com_x = {name: None for name in self._contact_geom_ids}
+        self._reset_com_support_visualization()
         # If initial reset is below threshold, lift robot a little
         torso_z = obs[0]
         if torso_z < self.custom_healthy_min:
@@ -505,3 +512,49 @@ class MorphHumanoidEnv(HumanoidEnv):
         tilt = 2 * np.arccos(abs(w))
         print(f"Torso tilt angle deg:  {np.rad2deg(tilt):.2f}")
         print("--------------------------")
+
+    def _set_support_geom_rgba(self, part_name, rgba):
+        geom_id = self._contact_geom_ids[part_name]
+        self.model.geom_rgba[geom_id] = np.asarray(rgba, dtype=float)
+
+    def _reset_com_support_visualization(self):
+        for part_name, rgba in self._default_support_rgba.items():
+            self._set_support_geom_rgba(part_name, rgba)
+
+    def _update_com_support_visualization(self, com_xy, x_limits, y_limits, support_points):
+        role_colors = {
+            "x_min": np.array([0.95, 0.2, 0.2, 1.0], dtype=float),
+            "x_max": np.array([0.2, 0.9, 0.2, 1.0], dtype=float),
+            "y_min": np.array([0.25, 0.45, 1.0, 1.0], dtype=float),
+            "y_max": np.array([0.95, 0.9, 0.2, 1.0], dtype=float),
+        }
+        base_color = np.array([0.35, 0.35, 0.35, 1.0], dtype=float)
+
+        idx_x_min = int(np.argmin(support_points[:, 0]))
+        idx_x_max = int(np.argmax(support_points[:, 0]))
+        idx_y_min = int(np.argmin(support_points[:, 1]))
+        idx_y_max = int(np.argmax(support_points[:, 1]))
+        role_by_idx = {}
+        for idx, role in (
+            (idx_x_min, "x_min"),
+            (idx_x_max, "x_max"),
+            (idx_y_min, "y_min"),
+            (idx_y_max, "y_max"),
+        ):
+            role_by_idx.setdefault(idx, []).append(role)
+
+        outside_distance = np.hypot(
+            max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1]),
+            max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1]),
+        )
+        alert_strength = min(1.0, float(outside_distance) / 0.1)
+        alert_tint = np.array([1.0, 0.0, 1.0, 1.0], dtype=float)
+
+        for idx, part_name in enumerate(self._com_support_part_names):
+            roles = role_by_idx.get(idx, [])
+            if roles:
+                color = np.mean([role_colors[r] for r in roles], axis=0)
+            else:
+                color = base_color.copy()
+            color = (1.0 - alert_strength) * color + alert_strength * alert_tint
+            self._set_support_geom_rgba(part_name, color)
