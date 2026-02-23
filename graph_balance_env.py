@@ -21,6 +21,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         velocity_shaping_gamma=0.99,
         angular_velocity_shaping_weight=0.5,
         angular_velocity_shaping_gamma=0.99,
+        energy_penalty_weight=0.05,
         upright_safe_zone_degrees=10.0,
         upright_failure_angle_degrees=60.0,
         upright_reward_weight=1.0,
@@ -38,6 +39,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.velocity_shaping_gamma = float(velocity_shaping_gamma)
         self.angular_velocity_shaping_weight = float(angular_velocity_shaping_weight)
         self.angular_velocity_shaping_gamma = float(angular_velocity_shaping_gamma)
+        self.graph_energy_penalty_weight = float(energy_penalty_weight)
         self.upright_safe_zone_degrees = float(upright_safe_zone_degrees)
         self.upright_failure_angle_degrees = float(upright_failure_angle_degrees)
         self.upright_reward_weight = float(upright_reward_weight)
@@ -55,7 +57,12 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
                 "upright_safe_zone_degrees"
             )
 
-        super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
+        super().__init__(
+            xml_file=xml_file,
+            morph_params=morph_params,
+            energy_penalty_weight=energy_penalty_weight,
+            **kwargs,
+        )
 
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
         self._adjacency = self._build_adjacency().astype(np.float32)
@@ -151,7 +158,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             self._set_limb_end_geom_rgba(geom_id, self._leaf_node_rgba)
         self._set_torso_geom_rgba(self._torso_safe_rgba)
 
-    def _update_com_component_visualization(self, com_xy):
+    def _update_com_component_visualization(self, com_xy, reward_fraction):
         if not self._limb_end_geom_ids:
             return
 
@@ -161,11 +168,20 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         x_max = float(limb_end_xy[:, 0].max())
         y_min = float(limb_end_xy[:, 1].min())
         y_max = float(limb_end_xy[:, 1].max())
-        outside_distance = float(np.hypot(
-            max(x_min - com_xy[0], 0.0, com_xy[0] - x_max),
-            max(y_min - com_xy[1], 0.0, com_xy[1] - y_max),
-        ))
-        torso_color = self._torso_safe_rgba if outside_distance <= 0.0 else self._torso_alert_rgba
+        outside_distance = float(
+            np.hypot(
+                max(x_min - com_xy[0], 0.0, com_xy[0] - x_max),
+                max(y_min - com_xy[1], 0.0, com_xy[1] - y_max),
+            )
+        )
+        if outside_distance <= 0.0:
+            blend_strength = float(np.clip(reward_fraction, 0.0, 1.0))
+        else:
+            blend_strength = 0.0
+        torso_color = (
+            (1.0 - blend_strength) * self._torso_alert_rgba
+            + blend_strength * self._torso_safe_rgba
+        )
 
         for geom_id in self._limb_end_geom_ids:
             self._set_limb_end_geom_rgba(geom_id, self._leaf_node_rgba)
@@ -183,7 +199,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         y_max = float(limb_end_xy[:, 1].max())
 
         com_xy = self.data.subtree_com[0][:2]
-        self._update_com_component_visualization(com_xy)
         inside_x = x_min <= float(com_xy[0]) <= x_max
         inside_y = y_min <= float(com_xy[1]) <= y_max
         inside_window = inside_x and inside_y
@@ -211,6 +226,13 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_com_window_distance = com_window_distance
 
         safe_window_reward += progress_reward
+
+        if self.com_safe_window_weight > 0.0:
+            reward_fraction = safe_window_reward / self.com_safe_window_weight
+        else:
+            reward_fraction = float(inside_window)
+        reward_fraction = float(np.clip(reward_fraction, 0.0, 1.0))
+        self._update_com_component_visualization(com_xy, reward_fraction)
 
         return safe_window_reward, inside_window, outside_distance
 
@@ -359,6 +381,11 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             )
         self._prev_angular_velocity_potential = angular_velocity_potential
 
+        action = np.asarray(action, dtype=float)
+        graph_energy_penalty = self.graph_energy_penalty_weight * float(
+            np.mean(action ** 2)
+        )
+
 
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
@@ -368,7 +395,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         reward += ( upright_reward
                    + velocity_shaping
                    + angular_velocity_shaping
-                   + safe_window_reward)
+                   + safe_window_reward
+                   - graph_energy_penalty)
 
 
         info["velocity_shaping"] = float(velocity_shaping)
@@ -379,5 +407,9 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
         info["upright_reward"] = float(upright_reward)
+        info["soft_upright_reward"] = float(upright_reward)
+        info["torso_tilt_degrees"] = float(tilt_angle_deg)
+        info["energy_penalty"] = float(energy_penalty)
+
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
