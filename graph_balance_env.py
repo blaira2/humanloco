@@ -24,7 +24,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         energy_penalty_weight=0.05,
         upright_safe_zone_degrees=10.0,
         upright_failure_angle_degrees=60.0,
-        upright_reward_weight=1.0,
+        upright_reward_weight=2.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         **kwargs,
@@ -68,7 +68,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._adjacency = self._build_adjacency().astype(np.float32)
         self._limb_end_body_ids = self._find_limb_end_body_ids()
         self._limb_end_viz_body_ids, self._limb_end_geom_ids = self._find_limb_end_geom_ids()
-        self._leaf_node_rgba = np.array([1.0, 1.0, 0.0, 1.0], dtype=float)
+        self._leaf_node_rgba = np.array([0.0, 0.1, 1.0, 1.0], dtype=float)
         self._torso_safe_rgba = np.array([0.0, 1.0, 0.0, 1.0], dtype=float)
         self._torso_alert_rgba = np.array([1.0, 0.0, 0.0, 1.0], dtype=float)
         self._torso_geom_id = self._find_torso_geom_id()
@@ -382,7 +382,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_angular_velocity_potential = angular_velocity_potential
 
         action = np.asarray(action, dtype=float)
-        graph_energy_penalty = self.graph_energy_penalty_weight * float(
+        energy_penalty = self.graph_energy_penalty_weight * float(
             np.mean(action ** 2)
         )
 
@@ -396,7 +396,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
                    + velocity_shaping
                    + angular_velocity_shaping
                    + safe_window_reward
-                   - graph_energy_penalty)
+                   - energy_penalty)
 
 
         info["velocity_shaping"] = float(velocity_shaping)
