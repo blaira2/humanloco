@@ -21,6 +21,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         velocity_shaping_gamma=0.99,
         angular_velocity_shaping_weight=0.5,
         angular_velocity_shaping_gamma=0.99,
+        energy_penalty_weight=0.05,
         upright_safe_zone_degrees=10.0,
         upright_failure_angle_degrees=60.0,
         upright_reward_weight=1.0,
@@ -38,6 +39,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.velocity_shaping_gamma = float(velocity_shaping_gamma)
         self.angular_velocity_shaping_weight = float(angular_velocity_shaping_weight)
         self.angular_velocity_shaping_gamma = float(angular_velocity_shaping_gamma)
+        self.graph_energy_penalty_weight = float(energy_penalty_weight)
         self.upright_safe_zone_degrees = float(upright_safe_zone_degrees)
         self.upright_failure_angle_degrees = float(upright_failure_angle_degrees)
         self.upright_reward_weight = float(upright_reward_weight)
@@ -55,7 +57,12 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
                 "upright_safe_zone_degrees"
             )
 
-        super().__init__(xml_file=xml_file, morph_params=morph_params, **kwargs)
+        super().__init__(
+            xml_file=xml_file,
+            morph_params=morph_params,
+            energy_penalty_weight=energy_penalty_weight,
+            **kwargs,
+        )
 
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
         self._adjacency = self._build_adjacency().astype(np.float32)
@@ -359,6 +366,11 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             )
         self._prev_angular_velocity_potential = angular_velocity_potential
 
+        action = np.asarray(action, dtype=float)
+        graph_energy_penalty = self.graph_energy_penalty_weight * float(
+            np.mean(action ** 2)
+        )
+
 
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
@@ -368,7 +380,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         reward += ( upright_reward
                    + velocity_shaping
                    + angular_velocity_shaping
-                   + safe_window_reward)
+                   + safe_window_reward
+                   - graph_energy_penalty)
 
 
         info["velocity_shaping"] = float(velocity_shaping)
@@ -380,5 +393,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_window_outside_distance"] = float(com_window_outside_distance)
         info["soft_upright_reward"] = float(upright_reward)
         info["torso_tilt_degrees"] = float(tilt_angle_deg)
+        info["graph_energy_penalty"] = float(graph_energy_penalty)
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
