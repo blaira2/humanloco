@@ -5,7 +5,7 @@ from balance_humanoid_env import BalanceHumanoidEnv
 
 
 class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
-    """BalanceHumanoidEnv that emits graph-structured observations for GCN policies."""
+    """An Environment that emits graph-structured observations for GCN policies."""
 
     def __init__(
         self,
