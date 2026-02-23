@@ -24,8 +24,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         upright_safe_zone_degrees=10.0,
         upright_failure_angle_degrees=60.0,
         upright_reward_weight=1.0,
-        min_tilt_failure_height_ratio=0.55,
-        min_tilt_failure_height_floor=0.6,
+        min_tilt_failure_height_ratio=0.4,
+        min_tilt_failure_height_floor=0.4,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
@@ -378,7 +378,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_safe_window_reward"] = float(safe_window_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
-        info["soft_upright_reward"] = float(upright_reward)
-        info["torso_tilt_degrees"] = float(tilt_angle_deg)
+        info["upright_reward"] = float(upright_reward)
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
