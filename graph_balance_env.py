@@ -158,7 +158,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             self._set_limb_end_geom_rgba(geom_id, self._leaf_node_rgba)
         self._set_torso_geom_rgba(self._torso_safe_rgba)
 
-    def _update_com_component_visualization(self, com_xy):
+    def _update_com_component_visualization(self, com_xy, reward_fraction):
         if not self._limb_end_geom_ids:
             return
 
@@ -168,11 +168,20 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         x_max = float(limb_end_xy[:, 0].max())
         y_min = float(limb_end_xy[:, 1].min())
         y_max = float(limb_end_xy[:, 1].max())
-        outside_distance = float(np.hypot(
-            max(x_min - com_xy[0], 0.0, com_xy[0] - x_max),
-            max(y_min - com_xy[1], 0.0, com_xy[1] - y_max),
-        ))
-        torso_color = self._torso_safe_rgba if outside_distance <= 0.0 else self._torso_alert_rgba
+        outside_distance = float(
+            np.hypot(
+                max(x_min - com_xy[0], 0.0, com_xy[0] - x_max),
+                max(y_min - com_xy[1], 0.0, com_xy[1] - y_max),
+            )
+        )
+        if outside_distance <= 0.0:
+            blend_strength = float(np.clip(reward_fraction, 0.0, 1.0))
+        else:
+            blend_strength = 0.0
+        torso_color = (
+            (1.0 - blend_strength) * self._torso_alert_rgba
+            + blend_strength * self._torso_safe_rgba
+        )
 
         for geom_id in self._limb_end_geom_ids:
             self._set_limb_end_geom_rgba(geom_id, self._leaf_node_rgba)
@@ -190,7 +199,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         y_max = float(limb_end_xy[:, 1].max())
 
         com_xy = self.data.subtree_com[0][:2]
-        self._update_com_component_visualization(com_xy)
         inside_x = x_min <= float(com_xy[0]) <= x_max
         inside_y = y_min <= float(com_xy[1]) <= y_max
         inside_window = inside_x and inside_y
@@ -218,6 +226,13 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_com_window_distance = com_window_distance
 
         safe_window_reward += progress_reward
+
+        if self.com_safe_window_weight > 0.0:
+            reward_fraction = safe_window_reward / self.com_safe_window_weight
+        else:
+            reward_fraction = float(inside_window)
+        reward_fraction = float(np.clip(reward_fraction, 0.0, 1.0))
+        self._update_com_component_visualization(com_xy, reward_fraction)
 
         return safe_window_reward, inside_window, outside_distance
 
