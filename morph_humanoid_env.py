@@ -174,6 +174,10 @@ class MorphHumanoidEnv(HumanoidEnv):
             name: np.array(self.model.geom_rgba[geom_id], dtype=float)
             for name, geom_id in self._contact_geom_ids.items()
         }
+        self._default_torso_rgba = np.array(self.model.geom_rgba[self.torso_geom_id], dtype=float)
+        self._leaf_node_rgba = np.array([1.0, 1.0, 0.0, 1.0], dtype=float)
+        self._torso_safe_rgba = np.array([0.0, 1.0, 0.0, 1.0], dtype=float)
+        self._torso_alert_rgba = np.array([1.0, 0.0, 0.0, 1.0], dtype=float)
         self._prev_contact_states = {name: False for name in self._contact_geom_ids}
         self._last_contact_x = {name: None for name in self._contact_geom_ids}
         self._last_lift_off_com_x = {name: None for name in self._contact_geom_ids}
@@ -517,44 +521,22 @@ class MorphHumanoidEnv(HumanoidEnv):
         geom_id = self._contact_geom_ids[part_name]
         self.model.geom_rgba[geom_id] = np.asarray(rgba, dtype=float)
 
+    def _set_torso_geom_rgba(self, rgba):
+        self.model.geom_rgba[self.torso_geom_id] = np.asarray(rgba, dtype=float)
+
     def _reset_com_support_visualization(self):
-        for part_name, rgba in self._default_support_rgba.items():
-            self._set_support_geom_rgba(part_name, rgba)
+        for part_name in self._default_support_rgba:
+            self._set_support_geom_rgba(part_name, self._leaf_node_rgba)
+        self._set_torso_geom_rgba(self._torso_safe_rgba)
 
     def _update_com_support_visualization(self, com_xy, x_limits, y_limits, support_points):
-        role_colors = {
-            "x_min": np.array([0.95, 0.2, 0.2, 1.0], dtype=float),
-            "x_max": np.array([0.2, 0.9, 0.2, 1.0], dtype=float),
-            "y_min": np.array([0.25, 0.45, 1.0, 1.0], dtype=float),
-            "y_max": np.array([0.95, 0.9, 0.2, 1.0], dtype=float),
-        }
-        base_color = np.array([0.35, 0.35, 0.35, 1.0], dtype=float)
-
-        idx_x_min = int(np.argmin(support_points[:, 0]))
-        idx_x_max = int(np.argmax(support_points[:, 0]))
-        idx_y_min = int(np.argmin(support_points[:, 1]))
-        idx_y_max = int(np.argmax(support_points[:, 1]))
-        role_by_idx = {}
-        for idx, role in (
-            (idx_x_min, "x_min"),
-            (idx_x_max, "x_max"),
-            (idx_y_min, "y_min"),
-            (idx_y_max, "y_max"),
-        ):
-            role_by_idx.setdefault(idx, []).append(role)
-
         outside_distance = np.hypot(
             max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1]),
             max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1]),
         )
         alert_strength = min(1.0, float(outside_distance) / 0.1)
-        alert_tint = np.array([1.0, 0.0, 1.0, 1.0], dtype=float)
+        torso_color = (1.0 - alert_strength) * self._torso_safe_rgba + alert_strength * self._torso_alert_rgba
 
-        for idx, part_name in enumerate(self._com_support_part_names):
-            roles = role_by_idx.get(idx, [])
-            if roles:
-                color = np.mean([role_colors[r] for r in roles], axis=0)
-            else:
-                color = base_color.copy()
-            color = (1.0 - alert_strength) * color + alert_strength * alert_tint
-            self._set_support_geom_rgba(part_name, color)
+        for part_name in self._com_support_part_names:
+            self._set_support_geom_rgba(part_name, self._leaf_node_rgba)
+        self._set_torso_geom_rgba(torso_color)
