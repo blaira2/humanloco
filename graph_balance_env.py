@@ -408,7 +408,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["angular_velocity_shaping"] = float(angular_velocity_shaping)
         info["non_forward_speed"] = float(non_forward_speed)
         info["angular_speed"] = float(angular_speed)
-        info["com_safe_window_reward"] = float(safe_window_reward)
+        info["com_reward"] = float(safe_window_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
         info["upright_reward"] = float(upright_reward)
