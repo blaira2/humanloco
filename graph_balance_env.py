@@ -212,10 +212,15 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         )
         com_window_distance = float(np.linalg.norm(com_xy - window_center))
 
-        if inside_window:
-            safe_window_reward = self.com_safe_window_weight
-        else:
-            safe_window_reward = 0.0
+        half_width = max((x_max - x_min) / 2.0, 1e-6)
+        half_height = max((y_max - y_min) / 2.0, 1e-6)
+        offset_x = abs(float(com_xy[0]) - float(window_center[0]))
+        offset_y = abs(float(com_xy[1]) - float(window_center[1]))
+
+        # Linear falloff from center of safe window; reaches 0 at window boundary.
+        normalized_offset = max(offset_x / half_width, offset_y / half_height)
+        center_alignment = float(np.clip(1.0 - normalized_offset, 0.0, 1.0))
+        safe_window_reward = self.com_safe_window_weight * center_alignment
 
         if self._prev_com_window_distance is None:
             progress_reward = 0.0
@@ -228,7 +233,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         safe_window_reward += progress_reward
 
         if self.com_safe_window_weight > 0.0:
-            reward_fraction = safe_window_reward / self.com_safe_window_weight
+            reward_fraction = center_alignment
         else:
             reward_fraction = float(inside_window)
         reward_fraction = float(np.clip(reward_fraction, 0.0, 1.0))
