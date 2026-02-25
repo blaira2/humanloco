@@ -15,7 +15,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         global_feature_dim=32,
         reset_height_step=0.0025,
         reset_max_drop=0.2,
-        com_safe_window_weight=1,
+        com_safe_window_weight=2,
         com_safe_window_progress_weight=0.5,
         velocity_shaping_weight=0.5,
         velocity_shaping_gamma=0.99,
