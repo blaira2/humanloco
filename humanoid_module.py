@@ -669,28 +669,10 @@ def train_variant(
             ent_coef=0.01,
             verbose=1
         )
-    elif isinstance(pretrained_model, SAC):
-        model = convert_sac_to_ppo(
-            pretrained_model,
-            vec_env,
-            lr_schedule,
-            parallel_envs,
-            ppo_policy=ppo_policy,
-        )
     elif isinstance(pretrained_model, (str, os.PathLike)):
-        if str(pretrained_model).endswith("_sac.zip"):
-            sac_model = SAC.load(pretrained_model, env=vec_env)
-            model = convert_sac_to_ppo(
-                sac_model,
-                vec_env,
-                lr_schedule,
-                parallel_envs,
-                ppo_policy=ppo_policy,
-            )
-        else:
-            model = PPO.load(pretrained_model, env=vec_env)
-            model.learning_rate = lr_schedule
-            model.lr_schedule = lr_schedule
+        model = PPO.load(pretrained_model, env=vec_env)
+        model.learning_rate = lr_schedule
+        model.lr_schedule = lr_schedule
     else:
         model = pretrained_model
         model.set_env(vec_env)
