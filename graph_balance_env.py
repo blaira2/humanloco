@@ -26,6 +26,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         com_alignment_weight=1,
         upright_reward_weight=0.01,
         com_progress_weight=0.5,
+        upper_body_above_end_effectors_weight=1.0,
         angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
@@ -48,6 +49,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.com_alignment_weight = float(com_alignment_weight)
         self.upright_reward_weight = float(upright_reward_weight)
         self.com_progress_weight = float(com_progress_weight)
+        self.upper_body_above_end_effectors_weight = float(
+            upper_body_above_end_effectors_weight
+        )
         self.angular_divergence_penalty_weight = float(
             angular_divergence_penalty_weight
         )
@@ -316,6 +320,29 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         return safe_window_reward, inside_window, outside_distance
 
+    def _upper_body_above_end_effectors_reward(self):
+        """Reward head + torso staying above the highest end-effector point."""
+        if not self._limb_end_body_ids:
+            return 0.0, 0.0
+
+        torso_body_id = self.model.body("torso").id
+        head_body_id = self.model.body("head").id
+
+        torso_z = float(self.data.xipos[torso_body_id][2])
+        head_z = float(self.data.xipos[head_body_id][2])
+        limb_end_z = self.data.xipos[list(self._limb_end_body_ids), 2]
+        max_end_effector_z = float(np.max(limb_end_z))
+
+        torso_margin = torso_z - max_end_effector_z
+        head_margin = head_z - max_end_effector_z
+
+        torso_above_score = float(np.clip(torso_margin, 0.0, 1.0))
+        head_above_score = float(np.clip(head_margin, 0.0, 1.0))
+        mean_above_score = 0.5 * (torso_above_score + head_above_score)
+
+        reward = self.upper_body_above_end_effectors_weight * mean_above_score
+        return reward, min(torso_margin, head_margin)
+
     def _flat_to_graph_obs(self, flat_obs):
         flat_obs = np.asarray(flat_obs, dtype=np.float32)
 
@@ -518,6 +545,10 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
         )
+        (
+            upper_body_above_end_effectors_reward,
+            upper_body_end_effector_clearance,
+        ) = self._upper_body_above_end_effectors_reward()
 
         ##-------- Reward -------##
         reward = (
@@ -534,6 +565,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             + velocity_shaping
             + angular_velocity_shaping
             + safe_window_reward
+            + upper_body_above_end_effectors_reward
             - graph_energy_penalty
         )
 
@@ -552,6 +584,12 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["torso_forward_divergence"] = float(torso_forward_divergence)
         info["angular_penalty"] = float(angular_divergence_penalty)
         info["energy_penalty"] = float(energy_penalty)
+        info["upper_body_above_end_effectors_reward"] = float(
+            upper_body_above_end_effectors_reward
+        )
+        info["upper_body_end_effector_clearance"] = float(
+            upper_body_end_effector_clearance
+        )
 
 
 
