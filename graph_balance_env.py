@@ -459,7 +459,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
         info["torso_forward_divergence"] = float(torso_forward_divergence)
-        info["angular_divergence_penalty"] = float(angular_divergence_penalty)
+        info["angular_penalty"] = float(angular_divergence_penalty)
         info["energy_penalty"] = float(energy_penalty)
 
 
