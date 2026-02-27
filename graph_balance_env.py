@@ -22,9 +22,7 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         angular_velocity_shaping_weight=0.5,
         angular_velocity_shaping_gamma=0.99,
         energy_penalty_weight=0.05,
-        upright_safe_zone_degrees=10.0,
-        upright_failure_angle_degrees=60.0,
-        upright_reward_weight=2.0,
+        angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         **kwargs,
@@ -40,9 +38,9 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.angular_velocity_shaping_weight = float(angular_velocity_shaping_weight)
         self.angular_velocity_shaping_gamma = float(angular_velocity_shaping_gamma)
         self.graph_energy_penalty_weight = float(energy_penalty_weight)
-        self.upright_safe_zone_degrees = float(upright_safe_zone_degrees)
-        self.upright_failure_angle_degrees = float(upright_failure_angle_degrees)
-        self.upright_reward_weight = float(upright_reward_weight)
+        self.angular_divergence_penalty_weight = float(
+            angular_divergence_penalty_weight
+        )
         self._min_tilt_failure_height_ratio = float(min_tilt_failure_height_ratio)
         self._min_tilt_failure_height_floor = float(min_tilt_failure_height_floor)
         self._use_morphology_aware_healthy_z_range = "healthy_z_range" not in kwargs
@@ -50,12 +48,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_angular_velocity_potential = None
         self._prev_com_window_distance = None
         self._steps_alive = 0
-
-        if self.upright_failure_angle_degrees <= self.upright_safe_zone_degrees:
-            raise ValueError(
-                "upright_failure_angle_degrees must be greater than "
-                "upright_safe_zone_degrees"
-            )
 
         super().__init__(
             xml_file=xml_file,
@@ -396,23 +388,17 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
 
         self._steps_alive += 1
 
-        torso_quat = self.data.xquat[1]
-        w = float(torso_quat[0])
-        tilt_angle_rad = 2 * np.arccos(np.clip(abs(w), 0.0, 1.0))
-        tilt_angle_deg = float(np.degrees(tilt_angle_rad))
-
-        if tilt_angle_deg <= self.upright_safe_zone_degrees:
-            upright_scale = 1.0
-        elif tilt_angle_deg >= self.upright_failure_angle_degrees:
-            upright_scale = 0.0
-        else:
-            upright_scale = (
-                self.upright_failure_angle_degrees - tilt_angle_deg
-            ) / (
-                self.upright_failure_angle_degrees - self.upright_safe_zone_degrees
-            )
-
-        upright_reward = self.upright_reward_weight * upright_scale
+        torso_body_id = self.model.body("torso").id
+        torso_rotation = self.data.xmat[torso_body_id].reshape(3, 3)
+        torso_forward_world = torso_rotation[:, 0]
+        world_forward = np.array([1.0, 0.0, 0.0], dtype=float)
+        forward_alignment = float(
+            np.clip(np.dot(torso_forward_world, world_forward), -1.0, 1.0)
+        )
+        torso_forward_divergence = float(np.arccos(forward_alignment))
+        angular_divergence_penalty = (
+            self.angular_divergence_penalty_weight * torso_forward_divergence
+        )
 
         root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
         non_forward_components = np.array(
@@ -456,11 +442,13 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         )
 
         ##-------- Reward -------##
-        reward += ( upright_reward
-                   + velocity_shaping
-                   + angular_velocity_shaping
-                   + safe_window_reward
-                   - energy_penalty)
+        reward += (
+            -angular_divergence_penalty
+            + velocity_shaping
+            + angular_velocity_shaping
+            + safe_window_reward
+            - energy_penalty
+        )
 
 
         info["velocity_shaping"] = float(velocity_shaping)
@@ -470,9 +458,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_reward"] = float(safe_window_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
-        info["upright_reward"] = float(upright_reward)
-        info["soft_upright_reward"] = float(upright_reward)
-        info["torso_tilt_degrees"] = float(tilt_angle_deg)
+        info["torso_forward_divergence"] = float(torso_forward_divergence)
+        info["angular_divergence_penalty"] = float(angular_divergence_penalty)
         info["energy_penalty"] = float(energy_penalty)
 
 
