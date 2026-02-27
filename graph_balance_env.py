@@ -1,10 +1,9 @@
 import numpy as np
 from gymnasium import spaces
+from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
 
-from balance_humanoid_env import BalanceHumanoidEnv
 
-
-class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
+class GraphBalanceHumanoidEnv(HumanoidEnv):
     """An Environment that emits graph-structured observations for GCN policies."""
 
     def __init__(
@@ -21,7 +20,12 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         velocity_shaping_gamma=0.99,
         angular_velocity_shaping_weight=0.5,
         angular_velocity_shaping_gamma=0.99,
+        velocity_penalty_weight=0.02,
         energy_penalty_weight=0.05,
+        angular_velocity_penalty_weight=0.06,
+        com_alignment_weight=1,
+        upright_reward_weight=0.01,
+        com_progress_weight=0.5,
         angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
@@ -35,9 +39,15 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.com_safe_window_progress_weight = float(com_safe_window_progress_weight)
         self.velocity_shaping_weight = float(velocity_shaping_weight)
         self.velocity_shaping_gamma = float(velocity_shaping_gamma)
+        self.velocity_penalty_weight = float(velocity_penalty_weight)
         self.angular_velocity_shaping_weight = float(angular_velocity_shaping_weight)
         self.angular_velocity_shaping_gamma = float(angular_velocity_shaping_gamma)
         self.graph_energy_penalty_weight = float(energy_penalty_weight)
+        self.energy_penalty_weight = float(energy_penalty_weight)
+        self.angular_velocity_penalty_weight = float(angular_velocity_penalty_weight)
+        self.com_alignment_weight = float(com_alignment_weight)
+        self.upright_reward_weight = float(upright_reward_weight)
+        self.com_progress_weight = float(com_progress_weight)
         self.angular_divergence_penalty_weight = float(
             angular_divergence_penalty_weight
         )
@@ -47,13 +57,27 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_velocity_potential = None
         self._prev_angular_velocity_potential = None
         self._prev_com_window_distance = None
+        self._prev_com_distance = None
         self._steps_alive = 0
+        self._phase_step = 0
+        self.phase_cycle = 200
+        self.morph = morph_params
 
         super().__init__(
             xml_file=xml_file,
-            morph_params=morph_params,
-            energy_penalty_weight=energy_penalty_weight,
+            forward_reward_weight=0.0,
+            ctrl_cost_weight=0.0,
+            contact_cost_weight=0.0,
+            healthy_reward=0.0,
             **kwargs,
+        )
+
+        base_space = self.observation_space
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(base_space.shape[0] + 1,),
+            dtype=base_space.dtype,
         )
 
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
@@ -341,10 +365,13 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._prev_velocity_potential = None
         self._prev_angular_velocity_potential = None
         self._prev_com_window_distance = None
+        self._prev_com_distance = None
+        self._phase_step = 0
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
         self._steps_alive = 0
         self._reset_com_component_visualization()
+        info["morph_params"] = self.morph
         obs = self._get_obs()
         return self._flat_to_graph_obs(obs), info
 
@@ -384,11 +411,71 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self.set_state(last_safe_qpos, base_qvel)
 
     def step(self, action):
-        obs, reward, terminated, truncated, info = super().step(action)
+        obs, _, terminated, truncated, info = super().step(action)
+        self._phase_step += 1
+        obs = self._get_obs()
 
         self._steps_alive += 1
 
+        # Balance reward terms (without alive reward).
+        survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
+        max_penalty = 100.0
+        terminal_penalty = max_penalty * (1.0 - survival_frac)
+        if not terminated:  # only if it actually fell, not time-limit
+            terminal_penalty = 0.0
+
+        root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
+        non_forward_components = np.array(
+            [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
+            dtype=float,
+        )
+        non_forward_speed = np.linalg.norm(non_forward_components)
+        velocity_penalty = self.velocity_penalty_weight * non_forward_speed
+        root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
+        angular_velocity_penalty = (
+            self.angular_velocity_penalty_weight * np.linalg.norm(root_ang_vel)
+        )
+
+        action = np.asarray(action, dtype=float)
+        energy_penalty = self.energy_penalty_weight * float(np.mean(action**2))
+
+        torso_quat = self.data.xquat[1]
+        w = float(torso_quat[0])
+        tilt_angle = 2 * np.arccos(np.clip(abs(w), 0.0, 1.0))
+        upright_reward = self.upright_reward_weight * np.exp(-tilt_angle)
+
         torso_body_id = self.model.body("torso").id
+        left_foot_id = self.model.body("left_foot").id
+        right_foot_id = self.model.body("right_foot").id
+        left_hand_geom_id = self.model.geom("left_hand").id
+        right_hand_geom_id = self.model.geom("right_hand").id
+        lf_xy = self.data.xipos[left_foot_id][:2]
+        rf_xy = self.data.xipos[right_foot_id][:2]
+        lh_xy = self.data.geom_xpos[left_hand_geom_id][:2]
+        rh_xy = self.data.geom_xpos[right_hand_geom_id][:2]
+        support_points = np.array([lf_xy, rf_xy, lh_xy, rh_xy], dtype=float)
+        x_limits = (float(support_points[:, 0].min()), float(support_points[:, 0].max()))
+        y_limits = (float(support_points[:, 1].min()), float(support_points[:, 1].max()))
+        support_center = np.array(
+            [(x_limits[0] + x_limits[1]) / 2.0, (y_limits[0] + y_limits[1]) / 2.0],
+            dtype=float,
+        )
+        com_xy = self.data.subtree_com[0][:2]
+        com_distance = float(np.linalg.norm(com_xy - support_center))
+        dx_outside = max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1])
+        dy_outside = max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1])
+        com_outside_distance = float(np.hypot(dx_outside, dy_outside))
+        com_alignment_reward = self.com_alignment_weight * (1.0 - com_outside_distance)
+
+        if self._prev_com_distance is None:
+            com_progress_reward = 0.0
+        else:
+            com_progress_reward = (
+                self.com_progress_weight * (self._prev_com_distance - com_distance)
+            )
+        self._prev_com_distance = com_distance
+        com_alignment_reward += com_progress_reward
+
         torso_rotation = self.data.xmat[torso_body_id].reshape(3, 3)
         torso_forward_world = torso_rotation[:, 0]
         world_forward = np.array([1.0, 0.0, 0.0], dtype=float)
@@ -400,14 +487,6 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             self.angular_divergence_penalty_weight * torso_forward_divergence
         )
 
-        root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
-        non_forward_components = np.array(
-            [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
-            dtype=float,
-        )
-        non_forward_speed = float(np.linalg.norm(non_forward_components))
-
-        root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
         angular_speed = float(np.linalg.norm(root_ang_vel))
 
         ## potential based shaping
@@ -431,9 +510,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
             )
         self._prev_angular_velocity_potential = angular_velocity_potential
 
-        action = np.asarray(action, dtype=float)
-        energy_penalty = self.graph_energy_penalty_weight * float(
-            np.mean(action ** 2)
+        graph_energy_penalty = self.graph_energy_penalty_weight * float(
+            np.mean(action**2)
         )
 
 
@@ -442,15 +520,28 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         )
 
         ##-------- Reward -------##
+        reward = (
+            com_alignment_reward
+            + upright_reward
+            - velocity_penalty
+            - angular_velocity_penalty
+            - terminal_penalty
+            - energy_penalty
+        )
+
         reward += (
             -angular_divergence_penalty
             + velocity_shaping
             + angular_velocity_shaping
             + safe_window_reward
-            - energy_penalty
+            - graph_energy_penalty
         )
 
 
+        info["alive_reward"] = 0.0
+        info["velocity_penalty"] = float(velocity_penalty)
+        info["upright_reward"] = float(upright_reward)
+        info["morph_params"] = self.morph
         info["velocity_shaping"] = float(velocity_shaping)
         info["angular_velocity_shaping"] = float(angular_velocity_shaping)
         info["non_forward_speed"] = float(non_forward_speed)
@@ -460,7 +551,12 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         info["com_window_outside_distance"] = float(com_window_outside_distance)
         info["torso_forward_divergence"] = float(torso_forward_divergence)
         info["angular_divergence_penalty"] = float(angular_divergence_penalty)
-        info["energy_penalty"] = float(energy_penalty)
+        info["energy_penalty"] = float(graph_energy_penalty)
 
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
+
+    def _get_obs(self):
+        obs = super()._get_obs()
+        phase = (self._phase_step % self.phase_cycle) / self.phase_cycle
+        return np.concatenate([obs, np.array([phase], dtype=obs.dtype)])
