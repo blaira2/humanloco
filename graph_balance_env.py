@@ -186,7 +186,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         return tuple(sorted(geom_ids))
 
     def _find_unhealthy_body_geom_ids(self):
-        body_names = ("torso", "head")
+        body_names = ("torso")
         geom_ids = []
         for body_name in body_names:
             try:
@@ -326,22 +326,18 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             return 0.0, 0.0
 
         torso_body_id = self.model.body("torso").id
-        head_body_id = self.model.body("head").id
-
         torso_z = float(self.data.xipos[torso_body_id][2])
-        head_z = float(self.data.xipos[head_body_id][2])
+
         limb_end_z = self.data.xipos[list(self._limb_end_body_ids), 2]
         max_end_effector_z = float(np.max(limb_end_z))
 
         torso_margin = torso_z - max_end_effector_z
-        head_margin = head_z - max_end_effector_z
 
         torso_above_score = float(np.clip(torso_margin, 0.0, 1.0))
-        head_above_score = float(np.clip(head_margin, 0.0, 1.0))
-        mean_above_score = 0.5 * (torso_above_score + head_above_score)
+        mean_above_score = 0.5 * (torso_above_score )
 
         reward = self.upper_body_above_end_effectors_weight * mean_above_score
-        return reward, min(torso_margin, head_margin)
+        return reward, torso_margin
 
     def _flat_to_graph_obs(self, flat_obs):
         flat_obs = np.asarray(flat_obs, dtype=np.float32)
