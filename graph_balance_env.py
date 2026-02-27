@@ -27,6 +27,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         upright_reward_weight=0.01,
         com_progress_weight=0.5,
         upper_body_above_end_effectors_weight=1.0,
+        torso_height_contact_reward_weight=0.2,
         angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
@@ -52,6 +53,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.com_progress_weight = float(com_progress_weight)
         self.upper_body_above_end_effectors_weight = float(
             upper_body_above_end_effectors_weight
+        )
+        self.torso_height_contact_reward_weight = float(
+            torso_height_contact_reward_weight
         )
         self.angular_divergence_penalty_weight = float(
             angular_divergence_penalty_weight
@@ -227,6 +231,26 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         return False
 
+    def _has_end_effector_ground_contact(self):
+        if not self._unhealthy_ground_geom_ids or not self._limb_end_geom_ids:
+            return False
+
+        ground_geom_ids = set(self._unhealthy_ground_geom_ids)
+        end_effector_geom_ids = set(self._limb_end_geom_ids)
+
+        for contact_idx in range(self.data.ncon):
+            contact = self.data.contact[contact_idx]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+
+            if (
+                (geom1 in end_effector_geom_ids and geom2 in ground_geom_ids)
+                or (geom2 in end_effector_geom_ids and geom1 in ground_geom_ids)
+            ):
+                return True
+
+        return False
+
     def _is_torso_too_low(self):
         if self._starting_torso_height is None:
             return False
@@ -352,6 +376,21 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         reward = self.upper_body_above_end_effectors_weight * mean_above_score
         return reward, torso_margin
+
+    def _torso_height_contact_reward(self):
+        torso_body_id = self.model.body("torso").id
+        torso_height = float(self.data.xipos[torso_body_id][2])
+        has_contact = self._has_end_effector_ground_contact()
+        if not has_contact:
+            return 0.0, False, torso_height
+
+        if self._starting_torso_height is None or self._starting_torso_height <= 0.0:
+            normalized_torso_height = max(0.0, torso_height)
+        else:
+            normalized_torso_height = max(0.0, torso_height / self._starting_torso_height)
+
+        reward = self.torso_height_contact_reward_weight * normalized_torso_height
+        return reward, True, torso_height
 
     def _flat_to_graph_obs(self, flat_obs):
         flat_obs = np.asarray(flat_obs, dtype=np.float32)
@@ -561,6 +600,11 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             upper_body_above_end_effectors_reward,
             upper_body_end_effector_clearance,
         ) = self._upper_body_above_end_effectors_reward()
+        (
+            torso_height_contact_reward,
+            end_effector_ground_contact,
+            torso_height,
+        ) = self._torso_height_contact_reward()
 
         ##-------- Reward -------##
         reward = (
@@ -578,6 +622,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             + angular_velocity_shaping
             + safe_window_reward
             + upper_body_above_end_effectors_reward
+            + torso_height_contact_reward
             - graph_energy_penalty
         )
 
@@ -598,6 +643,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["energy_penalty"] = float(energy_penalty)
         info["upper_body_above_reward"] = float( upper_body_above_end_effectors_reward)
         info["upper_body_clearance"] = float(  upper_body_end_effector_clearance)
+        info["torso_height_contact_reward"] = float(torso_height_contact_reward)
+        info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
+        info["torso_height"] = float(torso_height)
 
 
 
