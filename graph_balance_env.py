@@ -72,6 +72,8 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         self._torso_safe_rgba = np.array([0.0, 1.0, 0.0, 1.0], dtype=float)
         self._torso_alert_rgba = np.array([1.0, 0.0, 0.0, 1.0], dtype=float)
         self._torso_geom_id = self._find_torso_geom_id()
+        self._unhealthy_ground_geom_ids = self._find_ground_geom_ids()
+        self._unhealthy_body_geom_ids = self._find_unhealthy_body_geom_ids()
 
         self.observation_space = spaces.Dict(
             {
@@ -152,6 +154,63 @@ class GraphBalanceHumanoidEnv(BalanceHumanoidEnv):
         if geom_count <= 0 or geom_start < 0:
             return None
         return geom_start
+
+    def _find_ground_geom_ids(self):
+        ground_names = ("floor", "ground")
+        geom_ids = set()
+        for geom_name in ground_names:
+            try:
+                geom_ids.add(int(self.model.geom(geom_name).id))
+            except KeyError:
+                continue
+        return tuple(sorted(geom_ids))
+
+    def _find_unhealthy_body_geom_ids(self):
+        body_names = ("torso", "head")
+        geom_ids = []
+        for body_name in body_names:
+            try:
+                body_id = self.model.body(body_name).id
+            except KeyError:
+                continue
+
+            geom_start = int(self.model.body_geomadr[body_id])
+            geom_count = int(self.model.body_geomnum[body_id])
+            if geom_start < 0 or geom_count <= 0:
+                continue
+
+            for geom_id in range(geom_start, geom_start + geom_count):
+                geom_ids.append(int(geom_id))
+
+        return tuple(sorted(set(geom_ids)))
+
+    def _has_unhealthy_ground_contact(self):
+        if not self._unhealthy_ground_geom_ids or not self._unhealthy_body_geom_ids:
+            return False
+
+        ground_geom_ids = set(self._unhealthy_ground_geom_ids)
+        body_geom_ids = set(self._unhealthy_body_geom_ids)
+
+        for contact_idx in range(self.data.ncon):
+            contact = self.data.contact[contact_idx]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+
+            if (
+                (geom1 in body_geom_ids and geom2 in ground_geom_ids)
+                or (geom2 in body_geom_ids and geom1 in ground_geom_ids)
+            ):
+                return True
+
+        return False
+
+    @property
+    def is_healthy(self):
+        return not self._has_unhealthy_ground_contact()
+
+    @property
+    def terminated(self):
+        return (not self.is_healthy) if self._terminate_when_unhealthy else False
 
     def _reset_com_component_visualization(self):
         for geom_id in self._limb_end_geom_ids:
