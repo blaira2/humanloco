@@ -584,12 +584,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["torso_forward_divergence"] = float(torso_forward_divergence)
         info["angular_penalty"] = float(angular_divergence_penalty)
         info["energy_penalty"] = float(energy_penalty)
-        info["upper_body_above_end_effectors_reward"] = float(
-            upper_body_above_end_effectors_reward
-        )
-        info["upper_body_end_effector_clearance"] = float(
-            upper_body_end_effector_clearance
-        )
+        info["upper_body_above_reward"] = float( upper_body_above_end_effectors_reward)
+        info["upper_body_clearance"] = float(  upper_body_end_effector_clearance)
 
 
 

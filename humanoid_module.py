@@ -851,6 +851,8 @@ class RewardDebugCallback(BaseCallback):
                 "angular_penalty": 0.0,
                 "fatigue_multiplier": 0.0,
                 "collision_penalty": 0.0,
+                "upper_body_above_reward": 0.0,
+                "upper_body_clearance": 0.0,
                 "x_progress": 0.0,
             })
         self.ep_x_start = [None] * n_envs
@@ -882,6 +884,8 @@ class RewardDebugCallback(BaseCallback):
             s["energy_penalty"] += info.get("energy_penalty", 0.0)
             s["fatigue_multiplier"] += info.get("fatigue_multiplier", 0.0)
             s["collision_penalty"] += info.get("collision_penalty", 0.0)
+            s["upper_body_above_reward"] += info.get("upper_body_above_reward", 0.0)
+            s["upper_body_clearance"] += info.get("upper_body_clearance", 0.0)
 
 
             x_pos = info.get("x_position")
@@ -911,6 +915,8 @@ class RewardDebugCallback(BaseCallback):
                     f"energy_p={s['energy_penalty'] / L: .3f} |"
                     f"angular_p={s['angular_penalty'] / L: .3f} |"
                     f"fatigue_mult={s['fatigue_multiplier'] / L: .3f} |"
+                    f"upper_body_above_r={s['upper_body_above_reward'] / L: .3f} |"
+                    f"upper_body_clearance={s['upper_body_clearance'] / L: .3f} |"
                     f"contact_p={s['collision_penalty'] / L: .3f} |"
 
                 )
