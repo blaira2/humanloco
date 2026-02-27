@@ -645,7 +645,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["upper_body_clearance"] = float(  upper_body_end_effector_clearance)
         info["torso_height_contact_reward"] = float(torso_height_contact_reward)
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
-        info["torso_height"] = float(torso_height)
 
 
 
