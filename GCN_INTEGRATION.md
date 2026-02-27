@@ -26,3 +26,9 @@ Use `train_graph_balance_env(...)` (instead of `train_balance_env(...)`) to trai
 
 The GCN extractor is the feature encoder between graph observations and SAC heads.
 It maps node/edge structure + global features into a dense latent vector used by actor and critic networks.
+
+## Reward note for graph balance runs
+
+`GraphBalanceHumanoidEnv` inherits `BalanceHumanoidEnv.step(...)`, which sets `info["alive_reward"]` to `1.0` on non-terminal steps and `0.0` on terminal/truncated steps.
+So in callback logs, `alive` will often print near `1.000` for long episodes (for example, a 1000-step time-limit episode averages to ~0.999 and rounds to `1.000`).
+
