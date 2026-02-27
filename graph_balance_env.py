@@ -30,6 +30,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
+        unhealthy_torso_height_ratio=0.15,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
@@ -57,6 +58,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         )
         self._min_tilt_failure_height_ratio = float(min_tilt_failure_height_ratio)
         self._min_tilt_failure_height_floor = float(min_tilt_failure_height_floor)
+        self._unhealthy_torso_height_ratio = float(unhealthy_torso_height_ratio)
+        self._starting_torso_height = None
         self._use_morphology_aware_healthy_z_range = "healthy_z_range" not in kwargs
         self._prev_velocity_potential = None
         self._prev_angular_velocity_potential = None
@@ -224,9 +227,20 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         return False
 
+    def _is_torso_too_low(self):
+        if self._starting_torso_height is None:
+            return False
+
+        torso_body_id = self.model.body("torso").id
+        torso_height = float(self.data.xipos[torso_body_id][2])
+        min_healthy_height = (
+            self._unhealthy_torso_height_ratio * self._starting_torso_height
+        )
+        return torso_height < min_healthy_height
+
     @property
     def is_healthy(self):
-        return not self._has_unhealthy_ground_contact()
+        return not (self._has_unhealthy_ground_contact() or self._is_torso_too_low())
 
     @property
     def terminated(self):
@@ -392,6 +406,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._phase_step = 0
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
+        torso_body_id = self.model.body("torso").id
+        self._starting_torso_height = float(self.data.xipos[torso_body_id][2])
         self._steps_alive = 0
         self._reset_com_component_visualization()
         info["morph_params"] = self.morph
