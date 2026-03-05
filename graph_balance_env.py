@@ -25,7 +25,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         energy_penalty_weight=0.05,
         angular_velocity_penalty_weight=0.06,
         com_alignment_weight=1,
-        torso_position_stability_reward_weight=0.01,
+        torso_position_stability_reward_weight=0.1,
         torso_position_stability_buffer=0.03,
         com_progress_weight=0.5,
         upper_body_above_end_effectors_weight=1.0,
