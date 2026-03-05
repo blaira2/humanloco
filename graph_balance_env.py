@@ -513,8 +513,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         )
 
         action = np.asarray(action, dtype=float)
-        energy_penalty = self.energy_penalty_weight * float(np.mean(action**2))
-
         torso_body_id = self.model.body("torso").id
         torso_position = np.asarray(self.data.xipos[torso_body_id], dtype=float)
         if self._torso_position_window:
@@ -619,32 +617,24 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         reward = (
             com_alignment_reward
             + torso_position_stability_reward
-            - velocity_penalty
-            - angular_velocity_penalty
-            - terminal_penalty
-            - energy_penalty
-        )
-
-        reward += (
-            - angular_divergence_penalty
             + alive_reward
             + velocity_shaping
             + angular_velocity_shaping
             + safe_window_reward
             + upper_body_above_end_effectors_reward
+            - velocity_penalty
+            - angular_velocity_penalty
+            - angular_divergence_penalty
             - graph_energy_penalty
+            - terminal_penalty
         )
 
 
         info["alive_reward"] = float(alive_reward)
         info["velocity_penalty"] = float(velocity_penalty)
-        info["torso_position_stability_reward"] = float(
-            torso_position_stability_reward
-        )
+        info["torso_position_stability_reward"] = float(torso_position_stability_reward)
         info["torso_position_deviation"] = float(torso_position_deviation)
-        info["torso_position_stability_buffer"] = float(
-            self.torso_position_stability_buffer
-        )
+        info["torso_position_stability_buffer"] = float(self.torso_position_stability_buffer)
         info["morph_params"] = self.morph
         info["velocity_shaping"] = float(velocity_shaping)
         info["angular_velocity_shaping"] = float(angular_velocity_shaping)
@@ -655,7 +645,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["com_window_outside_distance"] = float(com_window_outside_distance)
         info["torso_forward_divergence"] = float(torso_forward_divergence)
         info["angular_penalty"] = float(angular_divergence_penalty)
-        info["energy_penalty"] = float(energy_penalty)
         info["upper_body_above_reward"] = float( upper_body_above_end_effectors_reward)
         info["upper_body_clearance"] = float(  upper_body_end_effector_clearance)
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
