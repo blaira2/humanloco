@@ -840,7 +840,7 @@ class RewardDebugCallback(BaseCallback):
                 "alive": 0.0,
                 "lateral_penalty": 0.0,
                 "com_reward": 0.0,
-                "upright_reward": 0.0,
+                "torso_position_stability_reward": 0.0,
                 "replacement_reward": 0.0,
                 "velocity_penalty": 0.0,
                 "vertical_velocity_shaping": 0.0,
@@ -875,7 +875,9 @@ class RewardDebugCallback(BaseCallback):
             s["alive"] += info.get("alive_reward", 0.0)
             s["lateral_penalty"] += info.get("lateral_penalty", 0.0)
             s["com_reward"] += info.get("com_reward", 0.0)
-            s["upright_reward"] += info.get("upright_reward", 0.0)
+            s["torso_position_stability_reward"] += info.get(
+                "torso_position_stability_reward", 0.0
+            )
             s["replacement_reward"] += info.get("replacement_reward", 0.0)
             s["velocity_stability_penalty"] += info.get("velocity_stability_penalty", 0.0)
             s["velocity_penalty"] += info.get("velocity_penalty", 0.0)
@@ -912,7 +914,7 @@ class RewardDebugCallback(BaseCallback):
                     f"vv_shaping={s['vertical_velocity_shaping'] / L: .3f} | "
                     f"av_shaping={s['angular_velocity_shaping'] / L: .3f} | "
                     f"com={s['com_reward'] / L: .3f} | "
-                    f"upright={s['upright_reward'] / L: .3f} | "
+                    f"torso_stability={s['torso_position_stability_reward'] / L: .3f} | "
                     f"replacem={s['replacement_reward'] / L: .3f} | "
                     f"lat_p={s['velocity_penalty'] / L: .3f} | "
                     f"vel_stab_p={s['velocity_stability_penalty'] / L: .3f} | "
