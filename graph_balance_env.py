@@ -27,11 +27,12 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         upright_reward_weight=0.01,
         com_progress_weight=0.5,
         upper_body_above_end_effectors_weight=1.0,
-        torso_height_contact_reward_weight=0.2,
+        torso_height_contact_reward_weight=1,
         angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.15,
+        alive_weight=0.5,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
@@ -73,6 +74,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._phase_step = 0
         self.phase_cycle = 200
         self.morph = morph_params
+        self.alive_weight = alive_weight
 
         super().__init__(
             xml_file=xml_file,
@@ -494,13 +496,16 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         self._steps_alive += 1
+        alive_reward = 0
 
         # Balance reward terms (without alive reward).
+
         survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
         max_penalty = 100.0
         terminal_penalty = max_penalty * (1.0 - survival_frac)
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
+            alive_reward = self.alive_weight
 
         root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
         non_forward_components = np.array(
@@ -617,7 +622,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         )
 
         reward += (
-            -angular_divergence_penalty
+            - angular_divergence_penalty
+            + alive_reward
             + velocity_shaping
             + angular_velocity_shaping
             + safe_window_reward
@@ -627,7 +633,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         )
 
 
-        info["alive_reward"] = 0.0
+        info["alive_reward"] = float(alive_reward)
         info["velocity_penalty"] = float(velocity_penalty)
         info["upright_reward"] = float(upright_reward)
         info["morph_params"] = self.morph
