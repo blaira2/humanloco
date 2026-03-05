@@ -385,21 +385,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         reward = self.upper_body_above_end_effectors_weight * mean_above_score
         return reward, torso_margin
 
-    def _torso_height_contact_reward(self):
-        torso_body_id = self.model.body("torso").id
-        torso_height = float(self.data.xipos[torso_body_id][2])
-        has_contact = self._has_end_effector_ground_contact()
-        if not has_contact:
-            return 0.0, False, torso_height
-
-        if self._starting_torso_height is None or self._starting_torso_height <= 0.0:
-            normalized_torso_height = max(0.0, torso_height)
-        else:
-            normalized_torso_height = max(0.0, torso_height / self._starting_torso_height)
-
-        reward = self.torso_height_contact_reward_weight * normalized_torso_height
-        return reward, True, torso_height
-
     def _flat_to_graph_obs(self, flat_obs):
         flat_obs = np.asarray(flat_obs, dtype=np.float32)
 
@@ -505,7 +490,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         obs = self._get_obs()
 
         self._steps_alive += 1
-        alive_reward = 0
+        alive_reward = 0.0
 
         # Balance reward terms (without alive reward).
 
@@ -514,7 +499,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         terminal_penalty = max_penalty * (1.0 - survival_frac)
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
-            alive_reward = self.alive_weight
 
         root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
         non_forward_components = np.array(
@@ -627,11 +611,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             upper_body_above_end_effectors_reward,
             upper_body_end_effector_clearance,
         ) = self._upper_body_above_end_effectors_reward()
-        (
-            torso_height_contact_reward,
-            end_effector_ground_contact,
-            torso_height,
-        ) = self._torso_height_contact_reward()
+        end_effector_ground_contact = self._has_end_effector_ground_contact()
+        if not (terminated or truncated) and end_effector_ground_contact:
+            alive_reward = self.alive_weight
 
         ##-------- Reward -------##
         reward = (
@@ -650,7 +632,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             + angular_velocity_shaping
             + safe_window_reward
             + upper_body_above_end_effectors_reward
-            + torso_height_contact_reward
             - graph_energy_penalty
         )
 
@@ -677,7 +658,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["energy_penalty"] = float(energy_penalty)
         info["upper_body_above_reward"] = float( upper_body_above_end_effectors_reward)
         info["upper_body_clearance"] = float(  upper_body_end_effector_clearance)
-        info["torso_height_contact_reward"] = float(torso_height_contact_reward)
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
 
 
