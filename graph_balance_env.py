@@ -1,4 +1,5 @@
 import numpy as np
+from collections import deque
 from gymnasium import spaces
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
 
@@ -24,7 +25,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         energy_penalty_weight=0.05,
         angular_velocity_penalty_weight=0.06,
         com_alignment_weight=1,
-        upright_reward_weight=0.01,
+        torso_position_stability_reward_weight=0.01,
+        torso_position_stability_buffer=0.03,
         com_progress_weight=0.5,
         upper_body_above_end_effectors_weight=1.0,
         torso_height_contact_reward_weight=1,
@@ -50,7 +52,11 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.energy_penalty_weight = float(energy_penalty_weight)
         self.angular_velocity_penalty_weight = float(angular_velocity_penalty_weight)
         self.com_alignment_weight = float(com_alignment_weight)
-        self.upright_reward_weight = float(upright_reward_weight)
+        self.torso_position_stability_reward_weight = float(
+            torso_position_stability_reward_weight
+        )
+        self.torso_position_stability_buffer = float(torso_position_stability_buffer)
+        self._torso_position_window = deque(maxlen=5)
         self.com_progress_weight = float(com_progress_weight)
         self.upper_body_above_end_effectors_weight = float(
             upper_body_above_end_effectors_weight
@@ -449,6 +455,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._set_morphology_aware_healthy_z_range()
         torso_body_id = self.model.body("torso").id
         self._starting_torso_height = float(self.data.xipos[torso_body_id][2])
+        torso_position = np.asarray(self.data.xipos[torso_body_id], dtype=float).copy()
+        self._torso_position_window.clear()
+        self._torso_position_window.append(torso_position)
         self._steps_alive = 0
         self._reset_com_component_visualization()
         info["morph_params"] = self.morph
@@ -522,12 +531,25 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         action = np.asarray(action, dtype=float)
         energy_penalty = self.energy_penalty_weight * float(np.mean(action**2))
 
-        torso_quat = self.data.xquat[1]
-        w = float(torso_quat[0])
-        tilt_angle = 2 * np.arccos(np.clip(abs(w), 0.0, 1.0))
-        upright_reward = self.upright_reward_weight * np.exp(-tilt_angle)
-
         torso_body_id = self.model.body("torso").id
+        torso_position = np.asarray(self.data.xipos[torso_body_id], dtype=float)
+        if self._torso_position_window:
+            torso_position_avg = np.mean(self._torso_position_window, axis=0)
+            torso_position_deviation = float(
+                np.linalg.norm(torso_position - torso_position_avg)
+            )
+        else:
+            torso_position_deviation = 0.0
+
+        torso_position_excess = max(
+            0.0, torso_position_deviation - self.torso_position_stability_buffer
+        )
+        torso_position_stability_reward = (
+            self.torso_position_stability_reward_weight
+            * np.exp(-torso_position_excess)
+        )
+        self._torso_position_window.append(torso_position.copy())
+
         left_foot_id = self.model.body("left_foot").id
         right_foot_id = self.model.body("right_foot").id
         left_hand_geom_id = self.model.geom("left_hand").id
@@ -614,7 +636,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         ##-------- Reward -------##
         reward = (
             com_alignment_reward
-            + upright_reward
+            + torso_position_stability_reward
             - velocity_penalty
             - angular_velocity_penalty
             - terminal_penalty
@@ -635,7 +657,13 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         info["alive_reward"] = float(alive_reward)
         info["velocity_penalty"] = float(velocity_penalty)
-        info["upright_reward"] = float(upright_reward)
+        info["torso_position_stability_reward"] = float(
+            torso_position_stability_reward
+        )
+        info["torso_position_deviation"] = float(torso_position_deviation)
+        info["torso_position_stability_buffer"] = float(
+            self.torso_position_stability_buffer
+        )
         info["morph_params"] = self.morph
         info["velocity_shaping"] = float(velocity_shaping)
         info["angular_velocity_shaping"] = float(angular_velocity_shaping)
