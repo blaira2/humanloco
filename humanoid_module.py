@@ -1,4 +1,6 @@
 
+import csv
+import itertools
 import numpy as np
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo, TimeLimit
@@ -108,6 +110,7 @@ def make_graph_balance_env(
     max_episode_steps=1000,
     node_feature_dim=8,
     global_feature_dim=32,
+    **env_kwargs,
 ):
     def _init():
         env = GraphBalanceHumanoidEnv(
@@ -116,6 +119,7 @@ def make_graph_balance_env(
             render_mode=None,
             node_feature_dim=node_feature_dim,
             global_feature_dim=global_feature_dim,
+            **env_kwargs,
         )
         env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env.reset(seed=seed)
@@ -406,6 +410,162 @@ def train_graph_balance_env(
     print(f"✔️ Graph training complete for {variant_name}")
 
     return model
+
+
+def evaluate_graph_balance_policy(
+        model,
+        xml_file,
+        cfg,
+        reward_weights=None,
+        eval_episodes=5,
+        max_episode_steps=1000,
+        node_feature_dim=8,
+        global_feature_dim=32,
+        base_seed=10_000,
+):
+    """Evaluate a graph SAC policy and return average reward/episode length."""
+    reward_weights = reward_weights or {}
+    env = TimeLimit(
+        GraphBalanceHumanoidEnv(
+            xml_file=os.path.abspath(xml_file),
+            morph_params=cfg,
+            render_mode=None,
+            node_feature_dim=node_feature_dim,
+            global_feature_dim=global_feature_dim,
+            **reward_weights,
+        ),
+        max_episode_steps=max_episode_steps,
+    )
+
+    episode_rewards = []
+    episode_lengths = []
+    for episode_idx in range(eval_episodes):
+        obs, _ = env.reset(seed=base_seed + episode_idx)
+        terminated = False
+        truncated = False
+        total_reward = 0.0
+        length = 0
+        while not (terminated or truncated):
+            action, _ = model.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            total_reward += float(reward)
+            length += 1
+        episode_rewards.append(total_reward)
+        episode_lengths.append(length)
+
+    env.close()
+    return float(np.mean(episode_rewards)), float(np.mean(episode_lengths))
+
+
+def tune_graph_balance_reward_weights(
+        variant_name,
+        cfg,
+        xml_file,
+        weight_grid,
+        steps_per_combo=100_000,
+        parallel_envs=3,
+        initial_learning_rate=3e-4,
+        max_episode_steps=1000,
+        eval_episodes=5,
+        node_feature_dim=8,
+        global_feature_dim=32,
+        sac_policy="MultiInputPolicy",
+        output_csv_path=None,
+):
+    """
+    Sweep all combinations of GraphBalanceHumanoidEnv reward weights.
+
+    Args:
+        weight_grid: dict mapping reward-weight kwargs to candidate numeric values.
+    """
+    if not weight_grid:
+        raise ValueError("weight_grid must be a non-empty dict of reward weights to test.")
+
+    weight_names = list(weight_grid.keys())
+    weight_values = [list(weight_grid[name]) for name in weight_names]
+    if any(len(values) == 0 for values in weight_values):
+        raise ValueError("Each entry in weight_grid must include at least one value.")
+
+    combinations = list(itertools.product(*weight_values))
+    xml_path = os.path.abspath(xml_file)
+    results = []
+
+    for combo_idx, combo in enumerate(combinations, start=1):
+        reward_weights = dict(zip(weight_names, combo))
+        run_name = f"{variant_name}_tune_{combo_idx:03d}"
+        print(
+            f"\n🔎 [{combo_idx}/{len(combinations)}] Training {run_name} with weights: {reward_weights}"
+        )
+
+        env_fns = [
+            make_graph_balance_env(
+                xml_path,
+                morph_params=cfg,
+                seed=seed,
+                max_episode_steps=max_episode_steps,
+                node_feature_dim=node_feature_dim,
+                global_feature_dim=global_feature_dim,
+                **reward_weights,
+            )
+            for seed in range(parallel_envs)
+        ]
+
+        vec_env = DummyVecEnv(env_fns) if parallel_envs == 1 else SubprocVecEnv(env_fns)
+        vec_env = VecMonitor(vec_env)
+
+        final_lr = initial_learning_rate * .1
+        lr_schedule = LinearSchedule(start=1e-4, end=final_lr, end_fraction=.9)
+        model = SAC(
+            sac_policy,
+            vec_env,
+            policy_kwargs=graph_sac_policy_kwargs,
+            learning_rate=lr_schedule,
+            buffer_size=1_000_000,
+            batch_size=256,
+            gamma=0.99,
+            tau=0.005,
+            train_freq=1,
+            gradient_steps=1,
+            learning_starts=10_000,
+            ent_coef="auto",
+            verbose=0,
+        )
+        model.learn(total_timesteps=steps_per_combo)
+
+        avg_reward, avg_episode_length = evaluate_graph_balance_policy(
+            model=model,
+            xml_file=xml_path,
+            cfg=cfg,
+            reward_weights=reward_weights,
+            eval_episodes=eval_episodes,
+            max_episode_steps=max_episode_steps,
+            node_feature_dim=node_feature_dim,
+            global_feature_dim=global_feature_dim,
+        )
+        vec_env.close()
+
+        run_result = {
+            "trial": combo_idx,
+            **reward_weights,
+            "avg_reward": avg_reward,
+            "avg_episode_length": avg_episode_length,
+        }
+        results.append(run_result)
+        print(
+            f"✅ Trial {combo_idx} done | avg_reward={avg_reward:.2f}, avg_ep_len={avg_episode_length:.1f}"
+        )
+
+    results.sort(key=lambda row: row["avg_reward"], reverse=True)
+
+    if output_csv_path:
+        fieldnames = ["trial", *weight_names, "avg_reward", "avg_episode_length"]
+        with open(output_csv_path, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+        print(f"📝 Saved tuning results to {output_csv_path}")
+
+    return results
 
 def train_balance_env_sac(
         variant_name,
