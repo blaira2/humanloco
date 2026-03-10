@@ -25,7 +25,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         energy_penalty_weight=0.02,
         angular_velocity_penalty_weight=0.06,
         com_alignment_weight=2,
-        torso_position_stability_reward_weight=5,
+        torso_position_stability_reward_weight=4,
         torso_position_stability_buffer=0.05,
         com_progress_weight=0.5,
         upper_body_above_end_effectors_weight=2.0,
@@ -34,7 +34,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.25,
-        alive_weight=0.5,
+        alive_weight=1,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
