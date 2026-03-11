@@ -1,6 +1,7 @@
 
 import csv
 import itertools
+import math
 import numpy as np
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo, TimeLimit
@@ -464,6 +465,7 @@ def tune_graph_balance_reward_weights(
         weight_grid,
         steps_per_combo=100_000,
         parallel_envs=3,
+        replay_buffer_size=100_000,
         initial_learning_rate=3e-4,
         max_episode_steps=1000,
         eval_episodes=5,
@@ -486,15 +488,15 @@ def tune_graph_balance_reward_weights(
     if any(len(values) == 0 for values in weight_values):
         raise ValueError("Each entry in weight_grid must include at least one value.")
 
-    combinations = list(itertools.product(*weight_values))
+    total_combinations = math.prod(len(values) for values in weight_values)
     xml_path = os.path.abspath(xml_file)
     results = []
 
-    for combo_idx, combo in enumerate(combinations, start=1):
+    for combo_idx, combo in enumerate(itertools.product(*weight_values), start=1):
         reward_weights = dict(zip(weight_names, combo))
         run_name = f"{variant_name}_tune_{combo_idx:03d}"
         print(
-            f"\n🔎 [{combo_idx}/{len(combinations)}] Training {run_name} with weights: {reward_weights}"
+            f"\n🔎 [{combo_idx}/{total_combinations}] Training {run_name} with weights: {reward_weights}"
         )
 
         env_fns = [
@@ -520,7 +522,7 @@ def tune_graph_balance_reward_weights(
             vec_env,
             policy_kwargs=graph_sac_policy_kwargs,
             learning_rate=lr_schedule,
-            buffer_size=1_000_000,
+            buffer_size=replay_buffer_size,
             batch_size=256,
             gamma=0.99,
             tau=0.005,
