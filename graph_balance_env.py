@@ -24,7 +24,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         torso_position_stability_reward_weight=6,
         torso_position_stability_buffer=0.05,
         com_progress_weight=1.2,
-        upper_body_above_end_effectors_weight=1.0,
+        torso_above_end_effectors_weight=1.0,
         angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
@@ -38,7 +38,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.reset_max_drop = float(reset_max_drop)
         self.com_safe_window_weight = float(com_safe_window_weight)
         self.com_safe_window_progress_weight = float(com_safe_window_progress_weight)
-        self.velocity_penalty_weight = float(velocity_penalty_weight)
         self.graph_energy_penalty_weight = float(energy_penalty_weight)
         self.energy_penalty_weight = float(energy_penalty_weight)
         self.angular_velocity_penalty_weight = float(angular_velocity_penalty_weight)
@@ -49,8 +48,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.torso_position_stability_buffer = float(torso_position_stability_buffer)
         self._torso_position_window = deque(maxlen=5)
         self.com_progress_weight = float(com_progress_weight)
-        self.upper_body_above_end_effectors_weight = float(
-            upper_body_above_end_effectors_weight
+        self.torso_above_end_effectors_weight = float(
+            torso_above_end_effectors_weight
         )
         self.angular_divergence_penalty_weight = float(
             angular_divergence_penalty_weight
@@ -380,7 +379,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         torso_above_score = float(np.clip(torso_margin, 0.0, 1.0))
         mean_above_score = 0.5 * (torso_above_score )
 
-        reward = self.upper_body_above_end_effectors_weight * mean_above_score
+        reward = self.torso_above_end_effectors_weight * mean_above_score
         return reward, torso_margin
 
     def _flat_to_graph_obs(self, flat_obs):
@@ -503,8 +502,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
             dtype=float,
         )
-        non_forward_speed = np.linalg.norm(non_forward_components)
-        velocity_penalty = self.velocity_penalty_weight * non_forward_speed
+
         root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
         angular_velocity_penalty = (
             self.angular_velocity_penalty_weight * np.linalg.norm(root_ang_vel)
@@ -596,7 +594,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             + alive_reward
             + safe_window_reward
             + upper_body_above_end_effectors_reward
-            - velocity_penalty
             - angular_velocity_penalty
             - angular_divergence_penalty
             - graph_energy_penalty
@@ -605,12 +602,10 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
 
         info["alive_reward"] = float(alive_reward)
-        info["velocity_penalty"] = float(velocity_penalty)
         info["torso_position_stability_reward"] = float(torso_position_stability_reward)
         info["torso_position_deviation"] = float(torso_position_deviation)
         info["torso_position_stability_buffer"] = float(self.torso_position_stability_buffer)
         info["morph_params"] = self.morph
-        info["non_forward_speed"] = float(non_forward_speed)
         info["angular_speed"] = float(angular_speed)
         info["com_reward"] = float(safe_window_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
