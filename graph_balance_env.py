@@ -90,13 +90,14 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._num_nodes = int(self.model.nbody - 1)  # skip world body
         self._adjacency = self._build_adjacency().astype(np.float32)
         self._limb_end_body_ids = self._find_limb_end_body_ids()
+        self._internal_body_ids = self._find_internal_body_ids()
         self._limb_end_viz_body_ids, self._limb_end_geom_ids = self._find_limb_end_geom_ids()
         self._leaf_node_rgba = np.array([0.0, 0.1, 1.0, 1.0], dtype=float)
         self._torso_safe_rgba = np.array([0.0, 1.0, 0.0, 1.0], dtype=float)
         self._torso_alert_rgba = np.array([1.0, 0.0, 0.0, 1.0], dtype=float)
         self._torso_geom_id = self._find_torso_geom_id()
-        self._unhealthy_ground_geom_ids = self._find_ground_geom_ids()
-        self._unhealthy_body_geom_ids = self._find_unhealthy_body_geom_ids()
+        self._ground_geom_ids = self._find_ground_geom_ids()
+
 
         self.observation_space = spaces.Dict(
             {
@@ -149,18 +150,46 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         ]
         return tuple(limb_end_ids)
 
+    def _find_internal_body_ids(self):
+        """Return non-leaf body ids, excluding world body."""
+        child_counts = np.zeros(self.model.nbody, dtype=np.int32)
+        for body_id in range(1, self.model.nbody):
+            parent_id = int(self.model.body_parentid[body_id])
+            if parent_id >= 0:
+                child_counts[parent_id] += 1
+
+        internal_body_ids = [
+            body_id
+            for body_id in range(1, self.model.nbody)
+            if child_counts[body_id] > 0
+        ]
+        return tuple(internal_body_ids)
+
     def _find_limb_end_geom_ids(self):
-        """Return geom ids associated with each limb-end body, in matching order."""
-        body_ids = []
-        geom_ids = []
-        for body_id in self._limb_end_body_ids:
-            geom_id = int(self.model.body_geomadr[body_id])
-            geom_count = int(self.model.body_geomnum[body_id])
-            if geom_count <= 0 or geom_id < 0:
-                continue
-            body_ids.append(body_id)
-            geom_ids.append(geom_id)
-        return tuple(body_ids), tuple(geom_ids)
+            """Return geom ids associated with each limb-end body, in matching order."""
+            body_ids = []
+            geom_ids = []
+            for body_id in self._limb_end_body_ids:
+                geom_id = int(self.model.body_geomadr[body_id])
+                geom_count = int(self.model.body_geomnum[body_id])
+                if geom_count <= 0 or geom_id < 0:
+                    continue
+                body_ids.append(body_id)
+                geom_ids.append(geom_id)
+            return tuple(body_ids), tuple(geom_ids)
+
+    def _find_internal_geom_ids(self):
+            """Return geom ids associated with each limb-end body, in matching order."""
+            body_ids = []
+            geom_ids = []
+            for body_id in self._internal_body_ids:
+                geom_id = int(self.model.body_geomadr[body_id])
+                geom_count = int(self.model.body_geomnum[body_id])
+                if geom_count <= 0 or geom_id < 0:
+                    continue
+                body_ids.append(body_id)
+                geom_ids.append(geom_id)
+            return tuple(body_ids), tuple(geom_ids)
 
     def _set_limb_end_geom_rgba(self, geom_id, rgba):
         self.model.geom_rgba[geom_id] = np.asarray(rgba, dtype=float)
@@ -188,31 +217,12 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
                 continue
         return tuple(sorted(geom_ids))
 
-    def _find_unhealthy_body_geom_ids(self):
-        body_names = ("torso")
-        geom_ids = []
-        for body_name in body_names:
-            try:
-                body_id = self.model.body(body_name).id
-            except KeyError:
-                continue
-
-            geom_start = int(self.model.body_geomadr[body_id])
-            geom_count = int(self.model.body_geomnum[body_id])
-            if geom_start < 0 or geom_count <= 0:
-                continue
-
-            for geom_id in range(geom_start, geom_start + geom_count):
-                geom_ids.append(int(geom_id))
-
-        return tuple(sorted(set(geom_ids)))
 
     def _has_unhealthy_ground_contact(self):
-        if not self._unhealthy_ground_geom_ids or not self._unhealthy_body_geom_ids:
-            return False
 
-        ground_geom_ids = set(self._unhealthy_ground_geom_ids)
-        body_geom_ids = set(self._unhealthy_body_geom_ids)
+        ground_geom_ids = set(self._ground_geom_ids)
+        #non end effectors are unsafe
+        body_geom_ids = self._find_internal_geom_ids()
 
         for contact_idx in range(self.data.ncon):
             contact = self.data.contact[contact_idx]
@@ -228,10 +238,10 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         return False
 
     def _has_end_effector_ground_contact(self):
-        if not self._unhealthy_ground_geom_ids or not self._limb_end_geom_ids:
+        if not self._ground_geom_ids or not self._limb_end_geom_ids:
             return False
 
-        ground_geom_ids = set(self._unhealthy_ground_geom_ids)
+        ground_geom_ids = set(self._ground_geom_ids)
         end_effector_geom_ids = set(self._limb_end_geom_ids)
 
         for contact_idx in range(self.data.ncon):
