@@ -465,7 +465,7 @@ def tune_graph_balance_reward_weights(
         weight_grid,
         steps_per_combo=100_000,
         parallel_envs=3,
-        replay_buffer_size=100_000,
+        replay_buffer_size=400_000,
         initial_learning_rate=3e-4,
         max_episode_steps=1000,
         eval_episodes=5,

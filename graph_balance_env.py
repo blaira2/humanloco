@@ -17,19 +17,14 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         reset_max_drop=0.2,
         com_safe_window_weight=2,
         com_safe_window_progress_weight=0.5,
-        velocity_shaping_weight=0.5,
-        velocity_shaping_gamma=0.99,
-        angular_velocity_shaping_weight=0.5,
-        angular_velocity_shaping_gamma=0.99,
         velocity_penalty_weight=0.02,
         energy_penalty_weight=0.02,
-        angular_velocity_penalty_weight=0.06,
+        angular_velocity_penalty_weight=0.08,
         com_alignment_weight=2,
-        torso_position_stability_reward_weight=4,
+        torso_position_stability_reward_weight=6,
         torso_position_stability_buffer=0.05,
-        com_progress_weight=0.5,
-        upper_body_above_end_effectors_weight=2.0,
-        torso_height_contact_reward_weight=1,
+        com_progress_weight=1.2,
+        upper_body_above_end_effectors_weight=1.0,
         angular_divergence_penalty_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
@@ -43,11 +38,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.reset_max_drop = float(reset_max_drop)
         self.com_safe_window_weight = float(com_safe_window_weight)
         self.com_safe_window_progress_weight = float(com_safe_window_progress_weight)
-        self.velocity_shaping_weight = float(velocity_shaping_weight)
-        self.velocity_shaping_gamma = float(velocity_shaping_gamma)
         self.velocity_penalty_weight = float(velocity_penalty_weight)
-        self.angular_velocity_shaping_weight = float(angular_velocity_shaping_weight)
-        self.angular_velocity_shaping_gamma = float(angular_velocity_shaping_gamma)
         self.graph_energy_penalty_weight = float(energy_penalty_weight)
         self.energy_penalty_weight = float(energy_penalty_weight)
         self.angular_velocity_penalty_weight = float(angular_velocity_penalty_weight)
@@ -60,9 +51,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.com_progress_weight = float(com_progress_weight)
         self.upper_body_above_end_effectors_weight = float(
             upper_body_above_end_effectors_weight
-        )
-        self.torso_height_contact_reward_weight = float(
-            torso_height_contact_reward_weight
         )
         self.angular_divergence_penalty_weight = float(
             angular_divergence_penalty_weight
@@ -576,31 +564,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         angular_speed = float(np.linalg.norm(root_ang_vel))
 
-        ## potential based shaping
-        velocity_potential = -non_forward_speed
-        if self._prev_velocity_potential is None:
-            velocity_shaping = 0.0
-        else:
-            velocity_shaping = self.velocity_shaping_weight * (
-                self.velocity_shaping_gamma * velocity_potential
-                - self._prev_velocity_potential
-            )
-        self._prev_velocity_potential = velocity_potential
-
-        angular_velocity_potential = -angular_speed
-        if self._prev_angular_velocity_potential is None:
-            angular_velocity_shaping = 0.0
-        else:
-            angular_velocity_shaping = self.angular_velocity_shaping_weight * (
-                self.angular_velocity_shaping_gamma * angular_velocity_potential
-                - self._prev_angular_velocity_potential
-            )
-        self._prev_angular_velocity_potential = angular_velocity_potential
-
         graph_energy_penalty = self.graph_energy_penalty_weight * float(
             np.mean(action**2)
         )
-
 
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
@@ -618,8 +584,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             com_alignment_reward
             + torso_position_stability_reward
             + alive_reward
-            + velocity_shaping
-            + angular_velocity_shaping
             + safe_window_reward
             + upper_body_above_end_effectors_reward
             - velocity_penalty
@@ -636,8 +600,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["torso_position_deviation"] = float(torso_position_deviation)
         info["torso_position_stability_buffer"] = float(self.torso_position_stability_buffer)
         info["morph_params"] = self.morph
-        info["velocity_shaping"] = float(velocity_shaping)
-        info["angular_velocity_shaping"] = float(angular_velocity_shaping)
         info["non_forward_speed"] = float(non_forward_speed)
         info["angular_speed"] = float(angular_speed)
         info["com_reward"] = float(safe_window_reward)
