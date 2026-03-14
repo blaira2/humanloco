@@ -25,6 +25,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         torso_position_stability_buffer=0.05,
         com_progress_weight=1.2,
         angular_divergence_penalty_weight=1.0,
+        torso_height_contact_reward_weight=1.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.25,
@@ -49,6 +50,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.com_progress_weight = float(com_progress_weight)
         self.angular_divergence_penalty_weight = float(
             angular_divergence_penalty_weight
+        )
+        self.torso_height_contact_reward_weight = float(
+            torso_height_contact_reward_weight
         )
         self._min_tilt_failure_height_ratio = float(min_tilt_failure_height_ratio)
         self._min_tilt_failure_height_floor = float(min_tilt_failure_height_floor)
@@ -562,11 +566,25 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         if not (terminated or truncated) and end_effector_ground_contact:
             alive_reward = self.alive_weight
 
+        torso_height_reward = 0.0
+        torso_height = float(torso_position[2])
+        if (
+            not (terminated or truncated)
+            and end_effector_ground_contact
+            and self._starting_torso_height is not None
+            and self._starting_torso_height > 0.0
+        ):
+            torso_height_ratio = torso_height / self._starting_torso_height
+            torso_height_reward = (
+                self.torso_height_contact_reward_weight * torso_height_ratio
+            )
+
         ##-------- Reward -------##
         reward = (
             com_alignment_reward
             + torso_position_stability_reward
             + alive_reward
+            + torso_height_reward
             + safe_window_reward
             - angular_velocity_penalty
             - angular_divergence_penalty
@@ -587,6 +605,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["torso_forward_divergence"] = float(torso_forward_divergence)
         info["angular_penalty"] = float(angular_divergence_penalty)
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
+        info["torso_height"] = float(torso_height)
+        info["torso_height_reward"] = float(torso_height_reward)
 
 
 
