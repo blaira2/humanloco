@@ -21,11 +21,11 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         energy_penalty_weight=0.02,
         angular_velocity_penalty_weight=0.08,
         com_alignment_weight=2,
-        torso_position_stability_reward_weight=6,
+        torso_position_stability_reward_weight=4,
         torso_position_stability_buffer=0.05,
         com_progress_weight=1.2,
         angular_divergence_penalty_weight=1.0,
-        torso_height_contact_reward_weight=1.0,
+        torso_height_contact_reward_weight=2.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.25,
@@ -592,7 +592,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             - terminal_penalty
         )
 
-
         info["alive_reward"] = float(alive_reward)
         info["torso_position_stability_reward"] = float(torso_position_stability_reward)
         info["torso_position_deviation"] = float(torso_position_deviation)
@@ -607,7 +606,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
         info["torso_height"] = float(torso_height)
         info["torso_height_reward"] = float(torso_height_reward)
-
 
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
