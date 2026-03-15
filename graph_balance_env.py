@@ -509,37 +509,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         )
         self._torso_position_window.append(torso_position.copy())
 
-        left_foot_id = self.model.body("left_foot").id
-        right_foot_id = self.model.body("right_foot").id
-        left_hand_geom_id = self.model.geom("left_hand").id
-        right_hand_geom_id = self.model.geom("right_hand").id
-        lf_xy = self.data.xipos[left_foot_id][:2]
-        rf_xy = self.data.xipos[right_foot_id][:2]
-        lh_xy = self.data.geom_xpos[left_hand_geom_id][:2]
-        rh_xy = self.data.geom_xpos[right_hand_geom_id][:2]
-        support_points = np.array([lf_xy, rf_xy, lh_xy, rh_xy], dtype=float)
-        x_limits = (float(support_points[:, 0].min()), float(support_points[:, 0].max()))
-        y_limits = (float(support_points[:, 1].min()), float(support_points[:, 1].max()))
-        support_center = np.array(
-            [(x_limits[0] + x_limits[1]) / 2.0, (y_limits[0] + y_limits[1]) / 2.0],
-            dtype=float,
-        )
-        com_xy = self.data.subtree_com[0][:2]
-        com_distance = float(np.linalg.norm(com_xy - support_center))
-        dx_outside = max(x_limits[0] - com_xy[0], 0.0, com_xy[0] - x_limits[1])
-        dy_outside = max(y_limits[0] - com_xy[1], 0.0, com_xy[1] - y_limits[1])
-        com_outside_distance = float(np.hypot(dx_outside, dy_outside))
-        com_alignment_reward = self.com_alignment_weight * (1.0 - com_outside_distance)
-
-        if self._prev_com_distance is None:
-            com_progress_reward = 0.0
-        else:
-            com_progress_reward = (
-                self.com_progress_weight * (self._prev_com_distance - com_distance)
-            )
-        self._prev_com_distance = com_distance
-        com_alignment_reward += com_progress_reward
-
         torso_rotation = self.data.xmat[torso_body_id].reshape(3, 3)
         torso_forward_world = torso_rotation[:, 0]
         world_forward = np.array([1.0, 0.0, 0.0], dtype=float)
@@ -580,8 +549,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         ##-------- Reward -------##
         reward = (
-            com_alignment_reward
-            + torso_position_stability_reward
+            torso_position_stability_reward
             + alive_reward
             + torso_height_reward
             + safe_window_reward
