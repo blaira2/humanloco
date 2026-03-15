@@ -15,12 +15,11 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         global_feature_dim=32,
         reset_height_step=0.0025,
         reset_max_drop=0.2,
-        com_safe_window_weight=2,
-        com_safe_window_progress_weight=0.5,
+        com_safe_window_weight=5,
+        com_safe_window_progress_weight=2,
         com_safe_window_radius=0.2,
-        energy_penalty_weight=0.02,
+        energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.08,
-        com_alignment_weight=4,
         torso_position_stability_reward_weight=4,
         torso_position_stability_buffer=0.05,
         com_progress_weight=1.5,
@@ -43,7 +42,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.graph_energy_penalty_weight = float(energy_penalty_weight)
         self.energy_penalty_weight = float(energy_penalty_weight)
         self.angular_velocity_penalty_weight = float(angular_velocity_penalty_weight)
-        self.com_alignment_weight = float(com_alignment_weight)
         self.torso_position_stability_reward_weight = float(
             torso_position_stability_reward_weight
         )
