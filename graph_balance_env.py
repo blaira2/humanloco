@@ -23,10 +23,10 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         com_alignment_weight=2,
         torso_position_stability_reward_weight=4,
         torso_position_stability_buffer=0.05,
-        com_progress_weight=1.2,
+        com_progress_weight=1.5,
         angular_divergence_penalty_weight=1.0,
-        torso_height_contact_reward_weight=2.0,
-        downward_velocity_shaping_weight=0.5,
+        torso_height_contact_reward_weight=1.5,
+        downward_velocity_shaping_weight=2.5,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.25,
@@ -490,9 +490,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         if self._prev_downward_velocity is None:
             downward_velocity_shaping = 0.0
         else:
-            downward_velocity_shaping = self.downward_velocity_shaping_weight * (
-                self._prev_downward_velocity - downward_velocity
-            )
+            downward_velocity_shaping = (self.downward_velocity_shaping_weight * max(0,(self._prev_downward_velocity - downward_velocity)))
         self._prev_downward_velocity = downward_velocity
 
         root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
