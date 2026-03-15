@@ -17,6 +17,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         reset_max_drop=0.2,
         com_safe_window_weight=2,
         com_safe_window_progress_weight=0.5,
+        com_safe_window_radius=0.2,
         velocity_penalty_weight=0.02,
         energy_penalty_weight=0.02,
         angular_velocity_penalty_weight=0.08,
@@ -39,6 +40,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.reset_max_drop = float(reset_max_drop)
         self.com_safe_window_weight = float(com_safe_window_weight)
         self.com_safe_window_progress_weight = float(com_safe_window_progress_weight)
+        self.com_safe_window_radius = float(com_safe_window_radius)
         self.graph_energy_penalty_weight = float(energy_penalty_weight)
         self.energy_penalty_weight = float(energy_penalty_weight)
         self.angular_velocity_penalty_weight = float(angular_velocity_penalty_weight)
@@ -285,26 +287,11 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             self._set_limb_end_geom_rgba(geom_id, self._leaf_node_rgba)
         self._set_torso_geom_rgba(self._torso_safe_rgba)
 
-    def _update_com_component_visualization(self, com_xy, reward_fraction):
+    def _update_com_component_visualization(self, reward_fraction):
         if not self._limb_end_geom_ids:
             return
 
-        limb_end_xy = self.data.xipos[list(self._limb_end_viz_body_ids), :2]
-
-        x_min = float(limb_end_xy[:, 0].min())
-        x_max = float(limb_end_xy[:, 0].max())
-        y_min = float(limb_end_xy[:, 1].min())
-        y_max = float(limb_end_xy[:, 1].max())
-        outside_distance = float(
-            np.hypot(
-                max(x_min - com_xy[0], 0.0, com_xy[0] - x_max),
-                max(y_min - com_xy[1], 0.0, com_xy[1] - y_max),
-            )
-        )
-        if outside_distance <= 0.0:
-            blend_strength = float(np.clip(reward_fraction, 0.0, 1.0))
-        else:
-            blend_strength = 0.0
+        blend_strength = float(np.clip(reward_fraction, 0.0, 1.0))
         torso_color = (
             (1.0 - blend_strength) * self._torso_alert_rgba
             + blend_strength * self._torso_safe_rgba
@@ -314,39 +301,44 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             self._set_limb_end_geom_rgba(geom_id, self._leaf_node_rgba)
         self._set_torso_geom_rgba(torso_color)
 
+    def _compute_weighted_com_window_center(self):
+        if not self._limb_end_body_ids:
+            return np.asarray(self.data.subtree_com[0][:2], dtype=float)
+
+        limb_end_positions = self.data.xipos[list(self._limb_end_body_ids), :3]
+        limb_end_xy = limb_end_positions[:, :2]
+        limb_end_height = limb_end_positions[:, 2]
+
+        if limb_end_height.size == 0:
+            return np.asarray(self.data.subtree_com[0][:2], dtype=float)
+
+        height_span = float(np.ptp(limb_end_height))
+        if height_span <= 1e-6:
+            weights = np.ones_like(limb_end_height, dtype=float)
+        else:
+            # Lower end effectors have smaller z values and should carry more weight.
+            normalized_height = (limb_end_height - float(limb_end_height.min())) / height_span
+            weights = 1.0 - normalized_height
+            weights += 1e-3
+
+        return np.average(limb_end_xy, axis=0, weights=weights)
+
     def _com_safe_window_reward(self):
-        """Reward CoM when it stays inside the box from outermost limb-end points."""
+        """Reward CoM when it stays inside a fixed-radius circle around weighted end-effectors."""
         if not self._limb_end_body_ids:
             return 0.0, False, 0.0
 
-        limb_end_xy = self.data.xipos[list(self._limb_end_body_ids), :2]
-        x_min = float(limb_end_xy[:, 0].min())
-        x_max = float(limb_end_xy[:, 0].max())
-        y_min = float(limb_end_xy[:, 1].min())
-        y_max = float(limb_end_xy[:, 1].max())
-
-        com_xy = self.data.subtree_com[0][:2]
-        inside_x = x_min <= float(com_xy[0]) <= x_max
-        inside_y = y_min <= float(com_xy[1]) <= y_max
-        inside_window = inside_x and inside_y
-
-        dx_outside = max(x_min - com_xy[0], 0.0, com_xy[0] - x_max)
-        dy_outside = max(y_min - com_xy[1], 0.0, com_xy[1] - y_max)
-        outside_distance = float(np.hypot(dx_outside, dy_outside))
-        window_center = np.array(
-            [(x_min + x_max) / 2.0, (y_min + y_max) / 2.0],
-            dtype=float,
-        )
+        com_xy = np.asarray(self.data.subtree_com[0][:2], dtype=float)
+        window_center = self._compute_weighted_com_window_center()
+        window_radius = max(self.com_safe_window_radius, 1e-6)
         com_window_distance = float(np.linalg.norm(com_xy - window_center))
-
-        half_width = max((x_max - x_min) / 2.0, 1e-6)
-        half_height = max((y_max - y_min) / 2.0, 1e-6)
-        offset_x = abs(float(com_xy[0]) - float(window_center[0]))
-        offset_y = abs(float(com_xy[1]) - float(window_center[1]))
+        inside_window = com_window_distance <= window_radius
+        outside_distance = max(0.0, com_window_distance - window_radius)
 
         # Linear falloff from center of safe window; reaches 0 at window boundary.
-        normalized_offset = max(offset_x / half_width, offset_y / half_height)
-        center_alignment = float(np.clip(1.0 - normalized_offset, 0.0, 1.0))
+        center_alignment = float(
+            np.clip(1.0 - (com_window_distance / window_radius), 0.0, 1.0)
+        )
         safe_window_reward = self.com_safe_window_weight * center_alignment
 
         if self._prev_com_window_distance is None:
@@ -364,7 +356,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         else:
             reward_fraction = float(inside_window)
         reward_fraction = float(np.clip(reward_fraction, 0.0, 1.0))
-        self._update_com_component_visualization(com_xy, reward_fraction)
+        self._update_com_component_visualization(reward_fraction)
 
         return safe_window_reward, inside_window, outside_distance
 
