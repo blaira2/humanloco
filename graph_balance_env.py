@@ -26,6 +26,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         com_progress_weight=1.2,
         angular_divergence_penalty_weight=1.0,
         torso_height_contact_reward_weight=2.0,
+        downward_velocity_shaping_weight=0.5,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.25,
@@ -54,6 +55,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.torso_height_contact_reward_weight = float(
             torso_height_contact_reward_weight
         )
+        self.downward_velocity_shaping_weight = float(
+            downward_velocity_shaping_weight
+        )
         self._min_tilt_failure_height_ratio = float(min_tilt_failure_height_ratio)
         self._min_tilt_failure_height_floor = float(min_tilt_failure_height_floor)
         self._unhealthy_torso_height_ratio = float(unhealthy_torso_height_ratio)
@@ -63,6 +67,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._prev_angular_velocity_potential = None
         self._prev_com_window_distance = None
         self._prev_com_distance = None
+        self._prev_downward_velocity = None
         self._steps_alive = 0
         self._phase_step = 0
         self.phase_cycle = 200
@@ -414,6 +419,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._prev_angular_velocity_potential = None
         self._prev_com_window_distance = None
         self._prev_com_distance = None
+        self._prev_downward_velocity = None
         self._phase_step = 0
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
@@ -480,10 +486,14 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             terminal_penalty = 0.0
 
         root_lin_vel = np.asarray(self.data.qvel[0:3], dtype=float)
-        non_forward_components = np.array(
-            [max(0.0, -root_lin_vel[0]), root_lin_vel[1], root_lin_vel[2]],
-            dtype=float,
-        )
+        downward_velocity = max(0.0, float(-root_lin_vel[2]))
+        if self._prev_downward_velocity is None:
+            downward_velocity_shaping = 0.0
+        else:
+            downward_velocity_shaping = self.downward_velocity_shaping_weight * (
+                self._prev_downward_velocity - downward_velocity
+            )
+        self._prev_downward_velocity = downward_velocity
 
         root_ang_vel = np.asarray(self.data.qvel[3:6], dtype=float)
         angular_velocity_penalty = (
@@ -586,6 +596,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             + alive_reward
             + torso_height_reward
             + safe_window_reward
+            + downward_velocity_shaping
             - angular_velocity_penalty
             - angular_divergence_penalty
             - graph_energy_penalty
@@ -606,6 +617,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
         info["torso_height"] = float(torso_height)
         info["torso_height_reward"] = float(torso_height_reward)
+        info["vertical_velocity_shaping"] = float(downward_velocity_shaping)
 
 
         return self._flat_to_graph_obs(obs), reward, terminated, truncated, info
