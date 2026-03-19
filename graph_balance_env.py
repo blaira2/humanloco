@@ -20,7 +20,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         com_safe_window_radius=0.12,
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.08,
-        torso_position_stability_reward_weight=3,
+        torso_position_stability_reward_weight=1.5,
         torso_position_stability_buffer=0.05,
         com_progress_weight=1.5,
         angular_divergence_penalty_weight=1.0,
@@ -182,7 +182,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             return tuple(body_ids), tuple(geom_ids)
 
     def _find_internal_geom_ids(self):
-            """Return geom ids associated with each limb-end body, in matching order."""
+            """Return geom ids associated with a body, in matching order."""
             body_ids = []
             geom_ids = []
             for body_id in self._internal_body_ids:
@@ -191,7 +191,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
                 if geom_count <= 0 or geom_id < 0:
                     continue
                 body_ids.append(body_id)
-                geom_ids.append(geom_id)
+                for offset in range(0,geom_count):  #for multiple geoms on a body
+                    geom_ids.append(geom_id + offset)
             return tuple(body_ids), tuple(geom_ids)
 
     def _set_limb_end_geom_rgba(self, geom_id, rgba):
@@ -225,7 +226,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         ground_geom_ids = set(self._ground_geom_ids)
         #non end effectors are unsafe
-        body_geom_ids = self._find_internal_geom_ids()
+        body_ids, body_geom_ids = self._find_internal_geom_ids()
 
         for contact_idx in range(self.data.ncon):
             contact = self.data.contact[contact_idx]
