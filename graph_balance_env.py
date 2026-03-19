@@ -26,6 +26,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         angular_divergence_penalty_weight=1.0,
         torso_height_contact_reward_weight=1.5,
         downward_velocity_shaping_weight=2,
+        unsafe_ground_contact_penalty=50.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.25,
@@ -57,6 +58,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.downward_velocity_shaping_weight = float(
             downward_velocity_shaping_weight
         )
+        self.unsafe_ground_contact_penalty = float(unsafe_ground_contact_penalty)
         self._min_tilt_failure_height_ratio = float(min_tilt_failure_height_ratio)
         self._min_tilt_failure_height_floor = float(min_tilt_failure_height_floor)
         self._unhealthy_torso_height_ratio = float(unhealthy_torso_height_ratio)
@@ -528,6 +530,10 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
         )
+        unsafe_ground_contact = self._has_unhealthy_ground_contact()
+        ground_contact_penalty = (
+            self.unsafe_ground_contact_penalty if unsafe_ground_contact else 0.0
+        )
 
         end_effector_ground_contact = self._has_end_effector_ground_contact()
         if not (terminated or truncated) and end_effector_ground_contact:
@@ -556,6 +562,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             - angular_velocity_penalty
             - angular_divergence_penalty
             - graph_energy_penalty
+            - ground_contact_penalty
             - terminal_penalty
         )
 
@@ -571,6 +578,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["torso_forward_divergence"] = float(torso_forward_divergence)
         info["angular_penalty"] = float(angular_divergence_penalty)
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
+        info["unsafe_ground_contact"] = bool(unsafe_ground_contact)
+        info["ground_contact_penalty"] = float(ground_contact_penalty)
         info["torso_height"] = float(torso_height)
         info["torso_height_reward"] = float(torso_height_reward)
         info["vertical_velocity_shaping"] = float(downward_velocity_shaping)
