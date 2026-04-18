@@ -1,4 +1,5 @@
 import numpy as np
+import mujoco
 from collections import deque
 from gymnasium import spaces
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
@@ -18,6 +19,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         com_safe_window_weight=6,
         com_safe_window_progress_weight=4,
         com_safe_window_radius=0.12,
+        cop_alignment_weight=3.0,
+        cop_progress_weight=1.5,
+        cop_safe_radius=0.1,
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.08,
         torso_position_stability_reward_weight=1.2,
@@ -39,6 +43,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self.com_safe_window_weight = float(com_safe_window_weight)
         self.com_safe_window_progress_weight = float(com_safe_window_progress_weight)
         self.com_safe_window_radius = float(com_safe_window_radius)
+        self.cop_alignment_weight = float(cop_alignment_weight)
+        self.cop_progress_weight = float(cop_progress_weight)
+        self.cop_safe_radius = float(cop_safe_radius)
         self.graph_energy_penalty_weight = float(energy_penalty_weight)
         self.energy_penalty_weight = float(energy_penalty_weight)
         self.angular_velocity_penalty_weight = float(angular_velocity_penalty_weight)
@@ -67,6 +74,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._prev_com_window_distance = None
         self._prev_com_distance = None
         self._prev_downward_velocity = None
+        self._prev_cop_distance = None
         self._steps_alive = 0
         self._phase_step = 0
         self.phase_cycle = 200
@@ -358,6 +366,62 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         return safe_window_reward, inside_window, outside_distance
 
+    def _compute_center_of_pressure(self):
+        if not self._ground_geom_ids:
+            return None, 0.0
+
+        ground_geom_ids = set(self._ground_geom_ids)
+        weighted_contact_xy = []
+        normal_forces = []
+        contact_force = np.zeros(6, dtype=np.float64)
+
+        for contact_idx in range(self.data.ncon):
+            contact = self.data.contact[contact_idx]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+            if geom1 not in ground_geom_ids and geom2 not in ground_geom_ids:
+                continue
+
+            mujoco.mj_contactForce(self.model, self.data, contact_idx, contact_force)
+            normal_force = max(0.0, float(contact_force[0]))
+            if normal_force <= 1e-6:
+                continue
+
+            weighted_contact_xy.append(np.asarray(contact.pos[:2], dtype=float))
+            normal_forces.append(normal_force)
+
+        if not normal_forces:
+            return None, 0.0
+
+        weights = np.asarray(normal_forces, dtype=float)
+        cop_xy = np.average(np.asarray(weighted_contact_xy, dtype=float), axis=0, weights=weights)
+        return cop_xy, float(weights.sum())
+
+    def _center_of_pressure_reward(self):
+        cop_xy, total_normal_force = self._compute_center_of_pressure()
+        if cop_xy is None:
+            self._prev_cop_distance = None
+            return 0.0, False, 0.0, 0.0
+
+        com_xy = np.asarray(self.data.subtree_com[0][:2], dtype=float)
+        cop_distance = float(np.linalg.norm(com_xy - cop_xy))
+        cop_radius = max(self.cop_safe_radius, 1e-6)
+        inside_cop_window = cop_distance <= cop_radius
+        cop_outside_distance = max(0.0, cop_distance - cop_radius)
+
+        center_alignment = float(np.clip(1.0 - (cop_distance / cop_radius), 0.0, 1.0))
+        cop_reward = self.cop_alignment_weight * center_alignment
+
+        if self._prev_cop_distance is None:
+            progress_reward = 0.0
+        else:
+            progress_reward = self.cop_progress_weight * (
+                self._prev_cop_distance - cop_distance
+            )
+        self._prev_cop_distance = cop_distance
+        cop_reward += progress_reward
+
+        return cop_reward, inside_cop_window, cop_outside_distance, total_normal_force
 
     def _flat_to_graph_obs(self, flat_obs):
         flat_obs = np.asarray(flat_obs, dtype=np.float32)
@@ -410,6 +474,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         self._prev_com_window_distance = None
         self._prev_com_distance = None
         self._prev_downward_velocity = None
+        self._prev_cop_distance = None
         self._phase_step = 0
         self._lower_to_ground_contact_threshold()
         self._set_morphology_aware_healthy_z_range()
@@ -528,6 +593,9 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         safe_window_reward, com_inside_window, com_window_outside_distance = (
             self._com_safe_window_reward()
         )
+        cop_reward, com_inside_cop_window, cop_window_outside_distance, cop_total_force = (
+            self._center_of_pressure_reward()
+        )
         unsafe_ground_contact = self._has_unhealthy_ground_contact()
         ground_contact_penalty = (
             self.unsafe_ground_contact_penalty if unsafe_ground_contact else 0.0
@@ -556,6 +624,7 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
             + alive_reward
             + torso_height_reward
             + safe_window_reward
+            + cop_reward
             + downward_velocity_shaping
             - angular_velocity_penalty
             - angular_divergence_penalty
@@ -571,8 +640,12 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         info["morph_params"] = self.morph
         info["angular_speed"] = float(angular_speed)
         info["com_reward"] = float(safe_window_reward)
+        info["cop_reward"] = float(cop_reward)
         info["com_inside_limb_window"] = bool(com_inside_window)
         info["com_window_outside_distance"] = float(com_window_outside_distance)
+        info["com_inside_cop_window"] = bool(com_inside_cop_window)
+        info["cop_window_outside_distance"] = float(cop_window_outside_distance)
+        info["cop_total_normal_force"] = float(cop_total_force)
         info["torso_forward_divergence"] = float(torso_forward_divergence)
         info["angular_penalty"] = float(angular_divergence_penalty)
         info["end_effector_ground_contact"] = bool(end_effector_ground_contact)
