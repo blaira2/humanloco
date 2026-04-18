@@ -20,17 +20,16 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         com_safe_window_radius=0.12,
         energy_penalty_weight=0.04,
         angular_velocity_penalty_weight=0.08,
-        torso_position_stability_reward_weight=1.5,
+        torso_position_stability_reward_weight=1.2,
         torso_position_stability_buffer=0.05,
-        com_progress_weight=1.5,
-        angular_divergence_penalty_weight=1.0,
+        angular_divergence_penalty_weight=0.6,
         torso_height_contact_reward_weight=1.5,
-        downward_velocity_shaping_weight=2,
-        unsafe_ground_contact_penalty=50.0,
+        downward_velocity_shaping_weight=3,
+        unsafe_ground_contact_penalty=70.0,
         min_tilt_failure_height_ratio=0.4,
         min_tilt_failure_height_floor=0.4,
         unhealthy_torso_height_ratio=0.25,
-        alive_weight=1,
+        alive_weight=1.5,
         **kwargs,
     ):
         self.node_feature_dim = int(node_feature_dim)
@@ -48,7 +47,6 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
         )
         self.torso_position_stability_buffer = float(torso_position_stability_buffer)
         self._torso_position_window = deque(maxlen=5)
-        self.com_progress_weight = float(com_progress_weight)
         self.angular_divergence_penalty_weight = float(
             angular_divergence_penalty_weight
         )
@@ -471,8 +469,8 @@ class GraphBalanceHumanoidEnv(HumanoidEnv):
 
         # Balance reward terms (without alive reward).
 
-        survival_frac = np.clip(self._steps_alive / 1000, 0.0, 1.0)
-        max_penalty = 100.0
+        survival_frac = np.clip(self._steps_alive / 1000, 0.0, 0.75)
+        max_penalty = 200.0
         terminal_penalty = max_penalty * (1.0 - survival_frac)
         if not terminated:  # only if it actually fell, not time-limit
             terminal_penalty = 0.0
